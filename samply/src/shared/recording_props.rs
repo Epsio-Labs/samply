@@ -81,6 +81,12 @@ pub struct ProfileCreationProps {
     pub create_per_cpu_threads: bool,
     /// Include up to N command line arguments in the process name
     pub arg_count_to_include_in_process_name: usize,
+    /// Emit markers for mmap events.
+    pub emit_mmap_markers: bool,
+    /// Emit markers for sched_switch events.
+    pub emit_sched_switch_markers: bool,
+    /// Emit markers for On-Cpu events.
+    pub emit_per_cpu_markers: bool,
     /// Override system architecture.
     #[allow(dead_code)]
     pub override_arch: Option<String>,

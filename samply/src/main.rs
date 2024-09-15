@@ -386,6 +386,18 @@ pub struct ProfileCreationArgs {
     #[arg(long)]
     unstable_presymbolicate: bool,
 
+    /// Emit markers for mmap events.
+    #[arg(long)]
+    mmap_markers: bool,
+
+    /// Emit markers for sched_switch events.
+    #[arg(long)]
+    sched_switch_markers: bool,
+
+    /// Emit markers for On-CPU events.
+    #[arg(long)]
+    per_cpu_markers: bool,
+
     /// Emit markers for any unknown ETW events that are encountered.
     #[cfg(target_os = "windows")]
     #[arg(long)]
@@ -539,6 +551,9 @@ impl ImportArgs {
             unlink_aux_files: self.profile_creation_args.unlink_aux_files,
             create_per_cpu_threads: self.profile_creation_args.per_cpu_threads,
             arg_count_to_include_in_process_name: self.profile_creation_args.include_args,
+            emit_mmap_markers: self.profile_creation_args.mmap_markers,
+            emit_sched_switch_markers: self.profile_creation_args.sched_switch_markers,
+            emit_per_cpu_markers: self.profile_creation_args.per_cpu_markers,
             override_arch: self.override_arch.clone(),
             unstable_presymbolicate: self.profile_creation_args.unstable_presymbolicate,
             coreclr: to_coreclr_profile_props(&self.coreclr),
@@ -662,6 +677,9 @@ impl RecordArgs {
             unlink_aux_files: self.profile_creation_args.unlink_aux_files,
             create_per_cpu_threads: self.profile_creation_args.per_cpu_threads,
             arg_count_to_include_in_process_name: self.profile_creation_args.include_args,
+            emit_mmap_markers: self.profile_creation_args.mmap_markers,
+            emit_sched_switch_markers: self.profile_creation_args.sched_switch_markers,
+            emit_per_cpu_markers: self.profile_creation_args.per_cpu_markers,
             override_arch: None,
             unstable_presymbolicate: self.profile_creation_args.unstable_presymbolicate,
             coreclr: to_coreclr_profile_props(&self.coreclr),

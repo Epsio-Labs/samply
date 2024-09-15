@@ -89,6 +89,9 @@ where
     arg_count_to_include_in_process_name: usize,
     cpus: Option<Cpus>,
 
+    emit_mmap_markers: bool,
+    emit_sched_switch_markers: bool,
+
     /// Whether repeated frames at the base of the stack should be folded
     /// into one frame.
     fold_recursive_prefix: bool,
@@ -229,7 +232,11 @@ where
 
         let cpus = if profile_creation_props.create_per_cpu_threads {
             let start_timestamp = timestamp_converter.convert_time(first_sample_time);
-            Some(Cpus::new(start_timestamp, &mut profile))
+            Some(Cpus::new(
+                start_timestamp,
+                &mut profile,
+                profile_creation_props.emit_per_cpu_markers,
+            ))
         } else {
             None
         };
@@ -267,6 +274,8 @@ where
                 .arg_count_to_include_in_process_name,
             cpus,
             call_chain_return_addresses_are_preadjusted,
+            emit_mmap_markers: profile_creation_props.emit_mmap_markers,
+            emit_sched_switch_markers: profile_creation_props.emit_sched_switch_markers,
         }
     }
 
@@ -461,34 +470,36 @@ where
                 .handle_switch_out(timestamp_mono, &mut thread.context_switch_data);
         }
 
-        if let (Some(cpu_index), Some(cpus)) = (e.cpu, &mut self.cpus) {
-            let stack_index = self.unresolved_stacks.convert(stack.iter().rev().cloned());
-            let cpu = cpus.get_mut(cpu_index as usize, &mut self.profile);
-            let timestamp = self.timestamp_converter.convert_time(timestamp_mono);
-            let marker_handle = self.profile.add_marker(
-                cpu.thread_handle,
-                MarkerTiming::Instant(timestamp),
-                SchedSwitchMarkerOnCpuTrack,
-            );
-            process.unresolved_samples.attach_stack_to_marker(
-                cpu.thread_handle,
-                timestamp,
-                timestamp_mono,
-                stack_index,
-                marker_handle,
-            );
-            let marker_handle = self.profile.add_marker(
-                thread.profile_thread,
-                MarkerTiming::Instant(timestamp),
-                SchedSwitchMarkerOnThreadTrack { cpu: cpu_index },
-            );
-            process.unresolved_samples.attach_stack_to_marker(
-                thread.profile_thread,
-                timestamp,
-                timestamp_mono,
-                stack_index,
-                marker_handle,
-            );
+        if self.emit_sched_switch_markers {
+            if let (Some(cpu_index), Some(cpus)) = (e.cpu, &mut self.cpus) {
+                let stack_index = self.unresolved_stacks.convert(stack.iter().rev().cloned());
+                let cpu = cpus.get_mut(cpu_index as usize, &mut self.profile);
+                let timestamp = self.timestamp_converter.convert_time(timestamp_mono);
+                let marker_handle = self.profile.add_marker(
+                    cpu.thread_handle,
+                    MarkerTiming::Instant(timestamp),
+                    SchedSwitchMarkerOnCpuTrack,
+                );
+                process.unresolved_samples.attach_stack_to_marker(
+                    cpu.thread_handle,
+                    timestamp,
+                    timestamp_mono,
+                    stack_index,
+                    marker_handle,
+                );
+                let marker_handle = self.profile.add_marker(
+                    thread.profile_thread,
+                    MarkerTiming::Instant(timestamp),
+                    SchedSwitchMarkerOnThreadTrack { cpu: cpu_index },
+                );
+                process.unresolved_samples.attach_stack_to_marker(
+                    thread.profile_thread,
+                    timestamp,
+                    timestamp_mono,
+                    stack_index,
+                    marker_handle,
+                );
+            }
         }
     }
 
@@ -738,7 +749,10 @@ where
 
     pub fn handle_mmap(&mut self, e: MmapRecord, timestamp: u64) {
         let mut path = e.path.as_slice();
-        self.add_mmap_marker(e.pid, e.tid, &path, timestamp);
+
+        if self.emit_mmap_markers {
+            self.add_mmap_marker(e.pid, e.tid, &path, timestamp);
+        }
 
         if self.check_jitdump_or_marker_file(&path, e.pid, e.tid) {
             // Not a DSO.
@@ -786,7 +800,10 @@ where
 
     pub fn handle_mmap2(&mut self, e: Mmap2Record, timestamp: u64) {
         let path = e.path.as_slice();
-        self.add_mmap_marker(e.pid, e.tid, &path, timestamp);
+
+        if self.emit_mmap_markers {
+            self.add_mmap_marker(e.pid, e.tid, &path, timestamp);
+        }
 
         if self.check_jitdump_or_marker_file(&path, e.pid, e.tid) {
             // Not a DSO.
