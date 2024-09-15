@@ -13,6 +13,7 @@ pub struct Cpus {
     combined_thread_handle: ThreadHandle,
     cpus: Vec<Cpu>,
     idle_frame_label: FrameInfo,
+    pub emit_markers: bool,
 }
 
 pub struct Cpu {
@@ -20,13 +21,15 @@ pub struct Cpu {
     pub thread_handle: ThreadHandle,
     pub context_switch_data: ThreadContextSwitchData,
     pub current_tid: Option<(i32, StringHandle, u64)>,
+    pub emit_markers: bool,
 }
 
 impl Cpu {
-    pub fn new(name: StringHandle, thread_handle: ThreadHandle) -> Self {
+    pub fn new(name: StringHandle, thread_handle: ThreadHandle, emit_markers: bool) -> Self {
         Self {
             name,
             thread_handle,
+            emit_markers,
             context_switch_data: Default::default(),
             current_tid: None,
         }
@@ -42,6 +45,10 @@ impl Cpu {
         thread_handles: &[ThreadHandle],
         profile: &mut Profile,
     ) {
+        if !self.emit_markers {
+            return;
+        }
+
         let previous_tid =
             std::mem::replace(&mut self.current_tid, Some((tid, thread_name, timestamp)));
         if let Some((_previous_tid, previous_thread_name, switch_in_timestamp)) = previous_tid {
@@ -70,6 +77,10 @@ impl Cpu {
         preempted: bool,
         profile: &mut Profile,
     ) {
+        if !self.emit_markers {
+            return;
+        }
+
         let previous_tid = self.current_tid.take();
         if let Some((previous_tid, previous_thread_name, switch_in_timestamp)) = previous_tid {
             let start_timestamp = converter.convert_time(switch_in_timestamp);
@@ -111,7 +122,7 @@ impl Cpu {
 }
 
 impl Cpus {
-    pub fn new(start_time: Timestamp, profile: &mut Profile) -> Self {
+    pub fn new(start_time: Timestamp, profile: &mut Profile, emit_markers: bool) -> Self {
         let process_handle = profile.add_process("CPU", 0, start_time);
         let combined_thread_handle = profile.add_thread(process_handle, 0, start_time, true);
         let idle_string = profile.intern_string("<Idle>");
@@ -126,6 +137,7 @@ impl Cpus {
             combined_thread_handle,
             cpus: Vec::new(),
             idle_frame_label,
+            emit_markers,
         }
     }
 
@@ -143,8 +155,11 @@ impl Cpus {
             let thread = profile.add_thread(self.process_handle, i as u32, self.start_time, false);
             let name = format!("CPU {i}");
             profile.set_thread_name(thread, &name);
-            self.cpus
-                .push(Cpu::new(profile.intern_string(&name), thread));
+            self.cpus.push(Cpu::new(
+                profile.intern_string(&name),
+                thread,
+                self.emit_markers,
+            ));
         }
         &mut self.cpus[cpu]
     }
