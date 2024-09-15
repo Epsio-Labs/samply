@@ -107,6 +107,9 @@ where
 
     /// Whether to emit context switch markers.
     should_emit_cswitch_markers: bool,
+
+    // Whether to emit mmap markers.
+    should_emit_mmap_markers: bool,
 }
 
 struct SimpleperfConverterData {
@@ -216,6 +219,7 @@ where
             call_chain_return_addresses_are_preadjusted,
             should_emit_jit_markers: profile_creation_props.should_emit_jit_markers,
             should_emit_cswitch_markers: profile_creation_props.should_emit_cswitch_markers,
+            should_emit_mmap_markers: profile_creation_props.should_emit_mmap_markers,
         }
     }
 
@@ -700,7 +704,10 @@ where
 
     pub fn handle_mmap(&mut self, e: MmapRecord, timestamp: u64) {
         let mut path = e.path.as_slice();
-        self.add_mmap_marker(e.pid, e.tid, &path, timestamp);
+
+        if self.should_emit_mmap_markers {
+            self.add_mmap_marker(e.pid, e.tid, &path, timestamp);
+        }
 
         if self.check_jitdump_or_marker_file(&path, e.pid, e.tid) {
             // Not a DSO.
@@ -748,7 +755,10 @@ where
 
     pub fn handle_mmap2(&mut self, e: Mmap2Record, timestamp: u64) {
         let path = e.path.as_slice();
-        self.add_mmap_marker(e.pid, e.tid, &path, timestamp);
+
+        if self.should_emit_mmap_markers {
+            self.add_mmap_marker(e.pid, e.tid, &path, timestamp);
+        }
 
         if self.check_jitdump_or_marker_file(&path, e.pid, e.tid) {
             // Not a DSO.

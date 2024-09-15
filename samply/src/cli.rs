@@ -317,6 +317,10 @@ pub struct ProfileCreationArgs {
     #[arg(long)]
     pub cswitch_markers: bool,
 
+    /// Emit markers for mmap events.
+    #[arg(long)]
+    mmap_markers: bool,
+
     /// Include up to <INCLUDE_ARGS> command line arguments in the process name.
     /// This can help differentiate processes if the same executable is used
     /// for different types of programs. And in --reuse-threads mode it
@@ -532,6 +536,7 @@ impl ProfileCreationArgs {
             presymbolicate: self.presymbolicate,
             should_emit_jit_markers: self.jit_markers,
             should_emit_cswitch_markers: self.cswitch_markers,
+            should_emit_mmap_markers: self.mmap_markers,
             coreclr: self.coreclr_profile_props(),
             #[cfg(target_os = "windows")]
             unknown_event_markers: self.unknown_event_markers,
