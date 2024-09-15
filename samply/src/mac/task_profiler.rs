@@ -44,7 +44,7 @@ use crate::shared::marker_file;
 use crate::shared::marker_file::get_markers;
 use crate::shared::perf_map::try_load_perf_map;
 use crate::shared::process_name::make_process_name;
-use crate::shared::process_sample_data::{MarkerSpanOnThread, ProcessSampleData};
+use crate::shared::process_sample_data::{MarkerOnThread, ProcessSampleData};
 use crate::shared::recording_props::ProfileCreationProps;
 use crate::shared::recycling::{ProcessRecycler, ProcessRecyclingData, ThreadRecycler};
 use crate::shared::timestamp_converter::TimestampConverter;
@@ -668,19 +668,19 @@ impl TaskProfiler {
             self.jit_function_recycler.as_mut(),
             &self.timestamp_converter,
         );
-        let mut marker_spans = Vec::new();
+        let mut markers = Vec::new();
         for (thread_handle, marker_file_path) in self.marker_file_paths {
-            if let Ok(marker_spans_from_this_file) =
+            if let Ok(markers_from_this_file) =
                 get_markers(&marker_file_path, &[], self.timestamp_converter)
             {
-                marker_spans.extend(marker_spans_from_this_file.into_iter().map(|span| {
-                    MarkerSpanOnThread {
-                        thread_handle,
-                        start_time: span.start_time,
-                        end_time: span.end_time,
-                        name: span.name,
-                    }
-                }));
+                markers.extend(
+                    markers_from_this_file
+                        .into_iter()
+                        .map(|marker| MarkerOnThread {
+                            thread_handle,
+                            event_or_span: marker,
+                        }),
+                );
                 if self.profile_creation_props.unlink_aux_files {
                     std::fs::remove_file(marker_file_path).ok();
                 }
@@ -691,7 +691,7 @@ impl TaskProfiler {
             self.lib_mapping_ops,
             jitdump_lib_ops,
             perf_map_mappings,
-            marker_spans,
+            markers,
         );
 
         let recycling_data = if let (Some(jit_function_recycler), Some(thread_recycler)) =
