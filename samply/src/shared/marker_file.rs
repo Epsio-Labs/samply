@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use fxprof_processed_profile::Timestamp;
+use log::warn;
 
 use super::timestamp_converter::TimestampConverter;
 use super::utils::open_file_with_fallback;
@@ -162,17 +163,28 @@ impl SpanTracker {
         json: serde_json::Value,
     ) -> Option<(serde_json::Value, serde_json::Value)> {
         let message = json.get("fields")?.get("message")?.as_str()?.to_string();
-
         if message != self.start_keyword && message != self.end_keyword {
             return None;
         }
 
-        if self.started_span_cache.contains_key(&id) {
-            assert_eq!(message, self.end_keyword);
-            let start = self.started_span_cache.remove(&id)?;
-            Some((start, json))
+        let span_exists = self.started_span_cache.contains_key(&id);
+        let expected_keyword = if span_exists {
+            &self.end_keyword
         } else {
-            assert_eq!(message, self.start_keyword);
+            &self.start_keyword
+        };
+
+        if &message != expected_keyword {
+            warn!(
+                "Dropping span - expected '{}', got '{}' for span {:?}",
+                expected_keyword, message, json
+            );
+            return None;
+        }
+
+        if span_exists {
+            Some((self.started_span_cache.remove(&id)?, json))
+        } else {
             self.started_span_cache.insert(id, json);
             None
         }
