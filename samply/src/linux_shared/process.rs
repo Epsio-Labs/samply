@@ -358,6 +358,7 @@ where
                 "malloc",
                 "Memory",
                 "Amount of allocated memory",
+                None,
             )
         })
     }
