@@ -8,6 +8,7 @@ use fxprof_processed_profile::{
 
 use super::process_threads::ProcessThreads;
 use super::thread::Thread;
+use crate::shared::counter_file::get_counter;
 use crate::shared::jit_category_manager::JitCategoryManager;
 use crate::shared::jit_function_add_marker::JitFunctionAddMarker;
 use crate::shared::jit_function_recycler::JitFunctionRecycler;
@@ -33,6 +34,7 @@ pub struct Process<U> {
     pub jit_app_cache_mapping_ops: LibMappingOpQueue,
     pub jit_function_recycler: Option<JitFunctionRecycler>,
     marker_file_paths: Vec<(ThreadHandle, PathBuf, Vec<PathBuf>)>,
+    counter_file_paths: Vec<(ThreadHandle, PathBuf, Vec<PathBuf>)>,
     pub prev_mm_filepages_size: i64,
     pub prev_mm_anonpages_size: i64,
     pub prev_mm_swapents_size: i64,
@@ -80,6 +82,7 @@ where
             jit_app_cache_mapping_ops: LibMappingOpQueue::default(),
             jit_function_recycler,
             marker_file_paths: Vec::new(),
+            counter_file_paths: Vec::new(),
             prev_mm_filepages_size: 0,
             prev_mm_anonpages_size: 0,
             prev_mm_swapents_size: 0,
@@ -184,6 +187,16 @@ where
             .push((thread, path.to_owned(), lookup_dirs));
     }
 
+    pub fn add_counter_file_path(
+        &mut self,
+        thread: ThreadHandle,
+        path: &Path,
+        lookup_dirs: Vec<PathBuf>,
+    ) {
+        self.counter_file_paths
+            .push((thread, path.to_owned(), lookup_dirs));
+    }
+
     pub fn notify_dead(&mut self, end_time: Timestamp, profile: &mut Profile) {
         self.threads.notify_process_dead(end_time, profile);
         profile.set_process_end_time(self.profile_process, end_time);
@@ -236,12 +249,23 @@ where
             }
         }
 
+        let mut counters = Vec::new();
+        for (_thread_handle, counter_file_path, lookup_dirs) in self.counter_file_paths {
+            if let Ok(counter_from_this_file) =
+                get_counter(&counter_file_path, &lookup_dirs, *timestamp_converter)
+            {
+                counters.push(counter_from_this_file);
+            }
+        }
+
         let process_sample_data = ProcessSampleData::new(
             std::mem::take(&mut self.unresolved_samples),
             std::mem::take(&mut self.lib_mapping_ops),
             jitdump_ops,
             perf_map_mappings,
             markers,
+            counters,
+            self.profile_process,
         );
 
         let thread_recycler = self.threads.finish();
