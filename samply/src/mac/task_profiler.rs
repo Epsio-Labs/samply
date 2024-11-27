@@ -692,6 +692,8 @@ impl TaskProfiler {
             jitdump_lib_ops,
             perf_map_mappings,
             markers,
+            vec![],
+            self.profile_process,
         );
 
         let recycling_data = if let (Some(jit_function_recycler), Some(thread_recycler)) =
