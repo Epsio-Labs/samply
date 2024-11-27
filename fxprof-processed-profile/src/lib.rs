@@ -41,6 +41,7 @@ mod frame;
 mod frame_table;
 mod func_table;
 mod global_lib_table;
+mod graph_color;
 mod lib_mappings;
 mod library_info;
 mod marker_table;
@@ -64,6 +65,7 @@ pub use counters::CounterHandle;
 pub use cpu_delta::CpuDelta;
 pub use frame::{Frame, FrameFlags, FrameInfo};
 pub use global_lib_table::{LibraryHandle, UsedLibraryAddressesIterator};
+pub use graph_color::GraphColor;
 pub use lib_mappings::LibMappings;
 pub use library_info::{LibraryInfo, Symbol, SymbolTable};
 pub use markers::{
