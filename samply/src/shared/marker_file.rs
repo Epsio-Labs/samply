@@ -91,9 +91,15 @@ impl MarkerStats {
                 if span.span_type != SpanType::Total {
                     return;
                 }
+                // Expected format: AtomType[-AtomId]/CollectionType-CollectionID
                 if let Some((_, collection)) = span.action.split_once("/") {
-                    let (collection_type, id) = collection.split_once("-").unwrap();
-                    let key = format!("{}::{}-{}", collection_type, marker.message, &id[0..8]);
+                    let (collection_type, mut id) = collection
+                        .split_once("-")
+                        .expect(format!("Invalid collection: {}", collection).as_str());
+                    if id.len() > 8 {
+                        id = &id[..8];
+                    }
+                    let key = format!("{}::{}-{}", collection_type, marker.message, &id);
                     *self.per_collection_map.entry(key.to_string()).or_default() += &span.timings;
                 }
             }
