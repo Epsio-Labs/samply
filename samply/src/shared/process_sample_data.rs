@@ -490,9 +490,11 @@ impl SpanMarkerWithTimingsSchema {
 
         if let Some((atom, collection)) = category_str.split_once('/') {
             category_str = atom;
-            let (collection, id) = collection.split_once('-').unwrap();
-            label =
-                profile.intern_string(&format!("{}-{} {}", collection, &id[..8], span.span_type));
+            let (collection, mut id) = collection.split_once('-').unwrap();
+            if id.len() > 8 {
+                id = &id[..8];
+            }
+            label = profile.intern_string(&format!("{}-{} {}", collection, &id, span.span_type));
         } else {
             label = profile.intern_string(&span.span_type.to_string());
         }
