@@ -4,7 +4,7 @@ use std::time::Duration;
 use assert_json_diff::assert_json_eq;
 use debugid::DebugId;
 use fxprof_processed_profile::{
-    CategoryColor, CategoryHandle, CpuDelta, Frame, FrameFlags, FrameInfo, LibraryInfo,
+    CategoryColor, CategoryHandle, CpuDelta, Frame, FrameFlags, FrameInfo, GraphColor, LibraryInfo,
     MarkerFieldFormat, MarkerFieldSchema, MarkerLocation, MarkerSchema, MarkerStaticField,
     MarkerTiming, Profile, ReferenceTimestamp, SamplingInterval, StaticSchemaMarker, StringHandle,
     Symbol, SymbolTable, Timestamp,
@@ -320,8 +320,13 @@ fn profile_without_js() {
         custom_marker,
     );
 
-    let memory_counter =
-        profile.add_counter(process, "malloc", "Memory", "Amount of allocated memory");
+    let memory_counter = profile.add_counter(
+        process,
+        "malloc",
+        "Memory",
+        "Amount of allocated memory",
+        Some(GraphColor::Grey),
+    );
     profile.add_counter_sample(
         memory_counter,
         Timestamp::from_millis_since_reference(0.0),
@@ -1006,6 +1011,7 @@ fn profile_without_js() {
                 "description": "Amount of allocated memory",
                 "mainThreadIndex": 0,
                 "pid": "123",
+                "color": "grey",
                 "samples": {
                   "length": 3,
                   "count": [
@@ -1314,16 +1320,26 @@ fn profile_counters_with_sorted_processes() {
         1,
     );
 
-    let memory_counter0 =
-        profile.add_counter(process0, "malloc", "Memory 1", "Amount of allocated memory");
+    let memory_counter0 = profile.add_counter(
+        process0,
+        "malloc-1",
+        "Memory",
+        "Amount of allocated memory",
+        Some(GraphColor::Red),
+    );
     profile.add_counter_sample(
         memory_counter0,
         Timestamp::from_millis_since_reference(1.0),
         0.0,
         0,
     );
-    let memory_counter1 =
-        profile.add_counter(process0, "malloc", "Memory 2", "Amount of allocated memory");
+    let memory_counter1 = profile.add_counter(
+        process0,
+        "malloc-2",
+        "Memory",
+        "Amount of allocated memory",
+        None,
+    );
     profile.add_counter_sample(
         memory_counter1,
         Timestamp::from_millis_since_reference(0.0),
@@ -1544,11 +1560,12 @@ fn profile_counters_with_sorted_processes() {
             "profilerOverhead": [],
             "counters": [
               {
-                "category": "Memory 1",
-                "name": "malloc",
+                "category": "Memory",
+                "name": "malloc-1",
                 "description": "Amount of allocated memory",
                 "mainThreadIndex": 1,
                 "pid": "123",
+                "color": "red",
                 "samples": {
                   "length": 1,
                   "count": [
@@ -1563,8 +1580,8 @@ fn profile_counters_with_sorted_processes() {
                 }
               },
               {
-                "category": "Memory 2",
-                "name": "malloc",
+                "category": "Memory",
+                "name": "malloc-2",
                 "description": "Amount of allocated memory",
                 "mainThreadIndex": 1,
                 "pid": "123",
