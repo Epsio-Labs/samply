@@ -2,11 +2,12 @@ use std::collections::HashMap;
 
 use fxprof_processed_profile::{
     Category, CategoryColor, CategoryHandle, LibMappings, Marker, MarkerFieldFlags,
-    MarkerFieldFormat, MarkerLocations, MarkerTiming, MarkerTypeHandle, Profile,
+    MarkerFieldFormat, MarkerLocations, MarkerTiming, MarkerTypeHandle, ProcessHandle, Profile,
     RuntimeSchemaMarkerField, RuntimeSchemaMarkerSchema, StaticSchemaMarker,
     StaticSchemaMarkerField, StringHandle, SubcategoryHandle, ThreadHandle,
 };
 
+use super::counter_file::Counter;
 use super::lib_mappings::{LibMappingInfo, LibMappingOpQueue, LibMappingsHierarchy};
 use super::marker_file::{EventOrSpanMarker, MarkerData, MarkerSpan, MarkerStats, TracingTimings};
 use super::stack_converter::StackConverter;
@@ -37,6 +38,8 @@ pub struct ProcessSampleData {
     jitdump_lib_mapping_op_queues: Vec<LibMappingOpQueue>,
     perf_map_mappings: Option<LibMappings<LibMappingInfo>>,
     markers: Vec<MarkerOnThread>,
+    counters: Vec<Counter>,
+    process: ProcessHandle,
 }
 
 impl ProcessSampleData {
@@ -46,6 +49,8 @@ impl ProcessSampleData {
         jitdump_lib_mapping_op_queues: Vec<LibMappingOpQueue>,
         perf_map_mappings: Option<LibMappings<LibMappingInfo>>,
         markers: Vec<MarkerOnThread>,
+        counters: Vec<Counter>,
+        process: ProcessHandle,
     ) -> Self {
         Self {
             unresolved_samples,
@@ -53,6 +58,8 @@ impl ProcessSampleData {
             jitdump_lib_mapping_op_queues,
             perf_map_mappings,
             markers,
+            counters,
+            process,
         }
     }
 
@@ -75,6 +82,8 @@ impl ProcessSampleData {
             jitdump_lib_mapping_op_queues,
             perf_map_mappings,
             markers,
+            counters,
+            process,
         } = self;
         let mut lib_mappings_hierarchy = LibMappingsHierarchy::new(regular_lib_mapping_op_queue);
         for jitdump_lib_mapping_ops in jitdump_lib_mapping_op_queues {
@@ -188,6 +197,27 @@ impl ProcessSampleData {
         }
         if !stats.is_empty() {
             stats.dump();
+        }
+
+        for counter in counters {
+            let counter_handle = profile.add_counter(
+                process,
+                &counter.name,
+                &counter.category,
+                &counter.description,
+            );
+            if let Some(color) = counter.color {
+                profile.set_counter_color(counter_handle, color);
+            }
+
+            for sample in counter.samples {
+                profile.add_counter_sample(
+                    counter_handle,
+                    sample.timestamp,
+                    sample.value_delta,
+                    sample.number_of_operations_delta,
+                );
+            }
         }
     }
 }
