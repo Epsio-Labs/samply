@@ -904,6 +904,19 @@ where
             return true;
         }
 
+        if filename.starts_with("counter-") && filename.ends_with(".json") {
+            let counter_file_path = Path::new(path);
+            let process = self.processes.get_by_pid(pid, &mut self.profile);
+            let thread = process.threads.get_thread_by_tid(tid, &mut self.profile);
+            let profile_thread = thread.profile_thread;
+            process.add_counter_file_path(
+                profile_thread,
+                counter_file_path,
+                self.aux_file_lookup_dirs.clone(),
+            );
+            return true;
+        }
+
         false
     }
 
