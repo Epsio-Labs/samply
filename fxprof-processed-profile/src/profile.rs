@@ -24,6 +24,7 @@ use crate::reference_timestamp::ReferenceTimestamp;
 use crate::string_table::{GlobalStringIndex, GlobalStringTable};
 use crate::thread::{ProcessHandle, Thread};
 use crate::timestamp::Timestamp;
+use crate::GraphColor;
 
 /// The sampling interval used during profile recording.
 ///
@@ -237,12 +238,12 @@ impl Profile {
     /// # Example
     ///
     /// ```
-    /// use fxprof_processed_profile::{Profile, CategoryHandle, CpuDelta, Frame, SamplingInterval, Timestamp};
+    /// use fxprof_processed_profile::{Profile, CategoryHandle, CpuDelta, Frame, GraphColor, SamplingInterval, Timestamp};
     /// use std::time::SystemTime;
     ///
     /// let mut profile = Profile::new("My app", SystemTime::now().into(), SamplingInterval::from_millis(1));
     /// let process = profile.add_process("App process", 54132, Timestamp::from_millis_since_reference(0.0));
-    /// let memory_counter = profile.add_counter(process, "malloc", "Memory", "Amount of allocated memory");
+    /// let memory_counter = profile.add_counter(process, "malloc", "Memory", "Amount of allocated memory", Some(GraphColor::Blue));
     /// profile.add_counter_sample(memory_counter, Timestamp::from_millis_since_reference(0.0), 0.0, 0);
     /// profile.add_counter_sample(memory_counter, Timestamp::from_millis_since_reference(1.0), 1000.0, 2);
     /// profile.add_counter_sample(memory_counter, Timestamp::from_millis_since_reference(2.0), 800.0, 1);
@@ -253,6 +254,7 @@ impl Profile {
         name: &str,
         category: &str,
         description: &str,
+        color: Option<GraphColor>,
     ) -> CounterHandle {
         let handle = CounterHandle(self.counters.len());
         self.counters.push(Counter::new(
@@ -261,6 +263,7 @@ impl Profile {
             description,
             process,
             self.processes[process.0].pid(),
+            color,
         ));
         handle
     }
