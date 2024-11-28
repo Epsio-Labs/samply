@@ -317,14 +317,23 @@ impl MarkerFile {
     }
 
     fn process_line(&mut self, line: &str) -> Option<EventOrSpanMarker> {
-        let (id, json) = line.split_once(' ')?;
-        let id = id.parse::<u64>().ok()?;
+        let (ids, json) = line.split_once(' ')?;
         let json: serde_json::Value = serde_json::from_str(json).ok()?;
+
+        let (id, tid) = if let Some((id, tid)) = ids.split_once(',') {
+            (id.parse::<u64>().ok()?, Some(tid.parse::<i32>().ok()?))
+        } else {
+            (ids.parse::<u64>().ok()?, None)
+        };
 
         if id != 0 {
             if let Some((start, end)) = self.new_close_tracker.process_line(id, json.clone()) {
                 self.process_complete_span(SpanType::Total, start, end)
-            } else if let Some((start, end)) = self.enter_exit_tracker.process_line(id, json) {
+            } else if let Some((start, mut end)) = self.enter_exit_tracker.process_line(id, json) {
+                // tid only makes sense for running spans
+                if let Some(tid) = tid {
+                    end["span"]["tid"] = serde_json::Value::from(tid);
+                }
                 self.process_complete_span(SpanType::Running, start, end)
             } else {
                 None
