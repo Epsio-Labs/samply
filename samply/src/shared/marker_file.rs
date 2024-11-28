@@ -36,6 +36,7 @@ pub struct EventOrSpanMarker {
     pub start_time: Timestamp,
     pub message: String,
     pub target: String,
+    pub extra_fields: HashMap<String, String>,
     pub marker_data: MarkerData,
 }
 
@@ -67,7 +68,6 @@ pub struct MarkerSpan {
     pub action: String,
     pub view_id: String,
     pub timings: TracingTimings,
-    pub extra_fields: HashMap<String, String>,
 }
 
 pub struct MarkerStats {
@@ -239,20 +239,8 @@ impl MarkerFile {
             .unwrap()
     }
 
-    fn process_complete_span(
-        &mut self,
-        span_type: SpanType,
-        start: serde_json::Value,
-        end: serde_json::Value,
-    ) -> Option<EventOrSpanMarker> {
-        let fields = end.get("fields").unwrap();
-
-        let start_time = self.read_timestamp_from_event(&start);
-        let end_time = self.read_timestamp_from_event(&end);
-
-        let mut span = end
-            .get("span")
-            .unwrap()
+    fn value_to_hashmap(value: &serde_json::Value) -> HashMap<String, String> {
+        value
             .as_object()
             .unwrap()
             .iter()
@@ -265,11 +253,25 @@ impl MarkerFile {
                     },
                 )
             })
-            .collect::<HashMap<String, String>>();
+            .collect::<HashMap<String, String>>()
+    }
 
-        let message = span.remove("name").unwrap();
-        let action = span.remove("action").unwrap_or("—".to_string());
-        let view_id = span.remove("view_id").unwrap_or("—".to_string());
+    fn process_complete_span(
+        &mut self,
+        span_type: SpanType,
+        start: serde_json::Value,
+        end: serde_json::Value,
+    ) -> Option<EventOrSpanMarker> {
+        let fields = end.get("fields").unwrap();
+
+        let start_time = self.read_timestamp_from_event(&start);
+        let end_time = self.read_timestamp_from_event(&end);
+
+        let mut extra_fields = Self::value_to_hashmap(end.get("span").unwrap());
+
+        let message = extra_fields.remove("name").unwrap();
+        let action = extra_fields.remove("action").unwrap_or("—".to_string());
+        let view_id = extra_fields.remove("view_id").unwrap_or("—".to_string());
 
         let target = end.get("target").unwrap().as_str().unwrap().to_string();
 
@@ -281,6 +283,7 @@ impl MarkerFile {
             start_time: self.timestamp_converter.convert_time(start_time),
             message,
             target,
+            extra_fields,
             marker_data: MarkerData::Span(MarkerSpan {
                 end_time: self.timestamp_converter.convert_time(end_time),
                 action,
@@ -290,28 +293,24 @@ impl MarkerFile {
                     time_busy,
                     time_idle,
                 },
-                extra_fields: span,
             }),
         })
     }
 
     fn process_event(&mut self, event: serde_json::Value) -> Option<EventOrSpanMarker> {
-        let message = event
-            .get("fields")
-            .unwrap()
-            .get("message")?
-            .as_str()
-            .unwrap()
-            .to_string();
         let start_time = self
             .timestamp_converter
             .convert_time(self.read_timestamp_from_event(&event));
         let target = event.get("target").unwrap().as_str().unwrap().to_string();
 
+        let mut extra_fields = Self::value_to_hashmap(event.get("fields").unwrap());
+        let message = extra_fields.remove("message")?;
+
         Some(EventOrSpanMarker {
             start_time,
             message,
             target,
+            extra_fields,
             marker_data: MarkerData::Event,
         })
     }
