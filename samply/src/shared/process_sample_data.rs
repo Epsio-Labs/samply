@@ -2,12 +2,13 @@ use std::collections::HashMap;
 
 use fxprof_processed_profile::{
     Category, CategoryColor, CategoryHandle, LibMappings, Marker, MarkerFieldFlags,
-    MarkerFieldFormat, MarkerLocations, MarkerTiming, MarkerTypeHandle, ProcessHandle, Profile,
-    RuntimeSchemaMarkerField, RuntimeSchemaMarkerSchema, StaticSchemaMarker,
-    StaticSchemaMarkerField, StringHandle, SubcategoryHandle, ThreadHandle,
+    MarkerFieldFormat, MarkerGraphType, MarkerLocations, MarkerTiming, MarkerTypeHandle,
+    ProcessHandle, Profile, RuntimeSchemaMarkerField, RuntimeSchemaMarkerGraph,
+    RuntimeSchemaMarkerSchema, StaticSchemaMarker, StaticSchemaMarkerField, StringHandle,
+    SubcategoryHandle, ThreadHandle,
 };
 
-use super::counter_file::Counter;
+use super::counter_file::{Counter, CounterCategory};
 use super::lib_mappings::{LibMappingInfo, LibMappingOpQueue, LibMappingsHierarchy};
 use super::marker_file::{EventOrSpanMarker, MarkerData, MarkerSpan, MarkerStats, TracingTimings};
 use super::stack_converter::StackConverter;
@@ -21,6 +22,12 @@ use super::unresolved_samples::{
 pub struct MarkerOnThread {
     pub thread_handle: ThreadHandle,
     pub event_or_span: EventOrSpanMarker,
+}
+
+#[derive(Debug, Clone)]
+pub struct CounterOnThread {
+    pub thread_handle: ThreadHandle,
+    pub counter: Counter,
 }
 
 #[derive(Debug, Clone)]
@@ -38,7 +45,7 @@ pub struct ProcessSampleData {
     jitdump_lib_mapping_op_queues: Vec<LibMappingOpQueue>,
     perf_map_mappings: Option<LibMappings<LibMappingInfo>>,
     markers: Vec<MarkerOnThread>,
-    counters: Vec<Counter>,
+    counters: Vec<CounterOnThread>,
     process: ProcessHandle,
 }
 
@@ -49,7 +56,7 @@ impl ProcessSampleData {
         jitdump_lib_mapping_op_queues: Vec<LibMappingOpQueue>,
         perf_map_mappings: Option<LibMappings<LibMappingInfo>>,
         markers: Vec<MarkerOnThread>,
-        counters: Vec<Counter>,
+        counters: Vec<CounterOnThread>,
         process: ProcessHandle,
     ) -> Self {
         Self {
@@ -199,24 +206,49 @@ impl ProcessSampleData {
             stats.dump();
         }
 
-        for counter in counters {
-            let counter_handle = profile.add_counter(
-                process,
-                &counter.name,
-                &counter.category,
-                &counter.description,
-            );
-            if let Some(color) = counter.color {
-                profile.set_counter_color(counter_handle, color);
-            }
+        for CounterOnThread {
+            counter,
+            thread_handle,
+        } in counters
+        {
+            match counter.category {
+                CounterCategory::Custom => {
+                    let marker_type = CustomGraphMarker::create_marker_type(profile, &counter);
 
-            for sample in counter.samples {
-                profile.add_counter_sample(
-                    counter_handle,
-                    sample.timestamp,
-                    sample.value_delta,
-                    sample.number_of_operations_delta,
-                );
+                    for sample in counter.samples {
+                        let marker = CustomGraphMarker::new(
+                            profile.handle_for_string(&counter.name),
+                            marker_type,
+                            sample.value,
+                        );
+
+                        profile.add_marker(
+                            thread_handle,
+                            MarkerTiming::Instant(sample.timestamp),
+                            marker,
+                        );
+                    }
+                }
+                _ => {
+                    let counter_handle = profile.add_counter(
+                        process,
+                        &counter.name,
+                        counter.category.into(),
+                        &counter.description,
+                    );
+                    if let Some(color) = counter.color {
+                        profile.set_counter_color(counter_handle, color);
+                    }
+
+                    for sample in counter.samples {
+                        profile.add_counter_sample(
+                            counter_handle,
+                            sample.timestamp,
+                            sample.value,
+                            sample.modification_count,
+                        );
+                    }
+                }
             }
         }
     }
@@ -533,6 +565,10 @@ impl Marker for SpanMarkerWithTimings {
             _ => unreachable!(),
         }
     }
+
+    fn flow_field_value(&self, _field_index: u32) -> u64 {
+        unreachable!()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -620,6 +656,70 @@ impl Marker for EventMarker {
 
     fn number_field_value(&self, _field_index: u32) -> f64 {
         unreachable!()
+    }
+
+    fn flow_field_value(&self, _field_index: u32) -> u64 {
+        unreachable!()
+    }
+}
+
+struct CustomGraphMarker {
+    marker_type: MarkerTypeHandle,
+    name: StringHandle,
+    value: f64,
+}
+
+impl CustomGraphMarker {
+    pub fn create_marker_type(profile: &mut Profile, counter: &Counter) -> MarkerTypeHandle {
+        profile.register_marker_type(RuntimeSchemaMarkerSchema {
+            description: None,
+            type_name: format!("CustomGraph-{}", counter.name),
+            locations: MarkerLocations::empty(),
+            chart_label: None,
+            tooltip_label: None,
+            table_label: None,
+            fields: vec![RuntimeSchemaMarkerField {
+                key: "value".into(),
+                label: "Value".into(),
+                format: MarkerFieldFormat::Decimal,
+                flags: MarkerFieldFlags::SEARCHABLE,
+            }],
+            graphs: vec![RuntimeSchemaMarkerGraph {
+                key: "value".into(),
+                graph_type: MarkerGraphType::Line,
+                color: counter.color,
+            }],
+            category: CategoryHandle::OTHER,
+        })
+    }
+
+    pub fn new(name: StringHandle, marker_type: MarkerTypeHandle, value: f64) -> Self {
+        Self {
+            marker_type,
+            name,
+            value,
+        }
+    }
+}
+
+impl Marker for CustomGraphMarker {
+    fn marker_type(&self, _profile: &mut Profile) -> MarkerTypeHandle {
+        self.marker_type
+    }
+
+    fn name(&self, _profile: &mut Profile) -> StringHandle {
+        self.name
+    }
+
+    fn string_field_value(&self, _field_index: u32) -> StringHandle {
+        unreachable!()
+    }
+
+    fn number_field_value(&self, field_index: u32) -> f64 {
+        match field_index {
+            0 => self.value,
+            _ => unreachable!(),
+        }
     }
 
     fn flow_field_value(&self, _field_index: u32) -> u64 {
