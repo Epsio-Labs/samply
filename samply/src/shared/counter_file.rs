@@ -10,7 +10,7 @@ use super::utils::open_file_with_fallback;
 pub enum CounterCategory {
     Memory,
     Bandwidth,
-    CPU,
+    Cpu,
     Custom,
 }
 
@@ -19,19 +19,19 @@ impl From<&str> for CounterCategory {
         match value {
             "Memory" => CounterCategory::Memory,
             "Bandwidth" => CounterCategory::Bandwidth,
-            "CPU" => CounterCategory::CPU,
+            "CPU" => CounterCategory::Cpu,
             "Custom" => CounterCategory::Custom,
             _ => panic!("Invalid counter category: {}", value),
         }
     }
 }
 
-impl Into<&str> for CounterCategory {
-    fn into(self) -> &'static str {
-        match self {
+impl From<CounterCategory> for &str {
+    fn from(val: CounterCategory) -> Self {
+        match val {
             CounterCategory::Memory => "Memory",
             CounterCategory::Bandwidth => "Bandwidth",
-            CounterCategory::CPU => "CPU",
+            CounterCategory::Cpu => "CPU",
             CounterCategory::Custom => "Custom",
         }
     }

@@ -86,31 +86,28 @@ impl MarkerStats {
     }
 
     pub fn process_span(&mut self, marker: &EventOrSpanMarker) {
-        match &marker.marker_data {
-            MarkerData::Span(span) => {
-                if span.span_type != SpanType::Total {
-                    return;
-                }
-                // Expected format: AtomType[-AtomId]/CollectionType-CollectionID
-                if let Some((_, collection)) = span.action.split_once("/") {
-                    let (collection_type, mut id) = collection
-                        .split_once("-")
-                        .expect(format!("Invalid collection: {}", collection).as_str());
-                    if id.len() > 8 {
-                        id = &id[..8];
-                    }
-                    let key = format!("{}::{}-{}", collection_type, marker.message, &id);
-                    *self.per_collection_map.entry(key.to_string()).or_default() += &span.timings;
-                }
+        if let MarkerData::Span(span) = &marker.marker_data {
+            if span.span_type != SpanType::Total {
+                return;
             }
-            _ => {}
+            // Expected format: AtomType[-AtomId]/CollectionType-CollectionID
+            if let Some((_, collection)) = span.action.split_once('/') {
+                let (collection_type, mut id) = collection
+                    .split_once('-')
+                    .unwrap_or_else(|| panic!("Invalid collection: {}", collection));
+                if id.len() > 8 {
+                    id = &id[..8];
+                }
+                let key = format!("{}::{}-{}", collection_type, marker.message, &id);
+                *self.per_collection_map.entry(key.to_string()).or_default() += &span.timings;
+            }
         }
     }
 
     fn calc_per_type(&self) -> HashMap<String, TracingTimings> {
         let mut per_type = HashMap::new();
         for (collection, timings) in self.per_collection_map.iter() {
-            let (collection_type, _) = collection.split_once("-").unwrap();
+            let (collection_type, _) = collection.split_once('-').unwrap();
             *per_type.entry(collection_type.to_string()).or_default() += timings;
         }
         per_type
@@ -216,7 +213,7 @@ impl MarkerFile {
 }
 
 fn parse_timing_field(fields: &serde_json::Value, field: &str) -> Option<Duration> {
-    let field_str = fields.get(field)?.as_str().unwrap().replace("µ", "u");
+    let field_str = fields.get(field)?.as_str().unwrap().replace('µ', "u");
 
     let end_idx = field_str
         .rfind(|c| char::is_numeric(c) || c == '.')
@@ -270,7 +267,7 @@ impl MarkerFile {
         let start_time = self.read_timestamp_from_event(&start);
         let end_time = self.read_timestamp_from_event(&end);
 
-        let mut extra_fields = Self::value_to_hashmap(&end.get("span").unwrap());
+        let mut extra_fields = Self::value_to_hashmap(end.get("span").unwrap());
 
         let message = extra_fields.remove("name").unwrap();
         let action = extra_fields.remove("action").unwrap_or("—".to_string());
@@ -278,9 +275,9 @@ impl MarkerFile {
 
         let target = end.get("target").unwrap().as_str().unwrap().to_string();
 
-        let time_busy = parse_timing_field(&fields, "time.busy")
+        let time_busy = parse_timing_field(fields, "time.busy")
             .unwrap_or(Duration::from_nanos(end_time - start_time));
-        let time_idle = parse_timing_field(&fields, "time.idle").unwrap_or_default();
+        let time_idle = parse_timing_field(fields, "time.idle").unwrap_or_default();
 
         Some(EventOrSpanMarker {
             start_time: self.timestamp_converter.convert_time(start_time),
@@ -306,7 +303,7 @@ impl MarkerFile {
             .convert_time(self.read_timestamp_from_event(&event));
         let target = event.get("target").unwrap().as_str().unwrap().to_string();
 
-        let mut extra_fields = Self::value_to_hashmap(&event.get("fields").unwrap());
+        let mut extra_fields = Self::value_to_hashmap(event.get("fields").unwrap());
         let message = extra_fields.remove("message")?;
 
         Some(EventOrSpanMarker {
@@ -350,7 +347,7 @@ impl Iterator for MarkerFile {
     type Item = EventOrSpanMarker;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some(line) = self.lines.next()?.ok() {
+        while let Ok(line) = self.lines.next()? {
             if let Some(marker) = self.process_line(&line) {
                 return Some(marker);
             }

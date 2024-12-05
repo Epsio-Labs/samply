@@ -159,7 +159,7 @@ impl ProcessSampleData {
                         profile,
                         &logging_category,
                         &marker,
-                        &marker_type,
+                        marker_type,
                         &field_values,
                     );
                     profile.add_marker(
@@ -178,9 +178,9 @@ impl ProcessSampleData {
                     let span_marker = SpanMarkerWithTimings::new(
                         profile,
                         &marker,
-                        &span,
+                        span,
                         &mut category_handles,
-                        &marker_type,
+                        marker_type,
                         &field_values,
                     );
                     profile.add_marker(
@@ -209,7 +209,7 @@ impl ProcessSampleData {
                             profile.intern_string(&counter.name),
                             CategoryHandle::OTHER,
                             marker_type,
-                            sample.value as f64,
+                            sample.value,
                         );
 
                         profile.add_marker(
@@ -498,7 +498,7 @@ pub struct SpanMarkerWithTimings {
 impl SpanMarkerWithTimings {
     pub fn create_marker_type(
         profile: &mut Profile,
-        extra_field_names: &Vec<String>,
+        extra_field_names: &[String],
     ) -> MarkerTypeHandle {
         let mut all_fields = vec![
             MarkerFieldSchema {
@@ -541,7 +541,7 @@ impl SpanMarkerWithTimings {
         }));
 
         profile.register_marker_type(MarkerSchema {
-            type_name: format!("Span-{}", extra_field_names.join("_")).into(),
+            type_name: format!("Span-{}", extra_field_names.join("_")),
             locations: vec![MarkerLocation::MarkerChart, MarkerLocation::MarkerTable],
             chart_label: Some("{marker.data.name}".into()),
             tooltip_label: Some("{marker.data.name}".into()),
@@ -558,16 +558,16 @@ impl SpanMarkerWithTimings {
         span: &MarkerSpan,
         category_handles: &mut HashMap<String, CategoryHandle>,
         marker_type: &MarkerTypeHandle,
-        field_values: &Vec<String>,
+        field_values: &[String],
     ) -> Self {
         let marker = &marker.event_or_span;
 
         let mut category_str: &str = &span.action;
         let label: StringHandle;
 
-        if let Some((atom, collection)) = category_str.split_once("/") {
+        if let Some((atom, collection)) = category_str.split_once('/') {
             category_str = atom;
-            let (collection, mut id) = collection.split_once("-").unwrap();
+            let (collection, mut id) = collection.split_once('-').unwrap();
             if id.len() > 8 {
                 id = &id[..8];
             }
@@ -576,10 +576,9 @@ impl SpanMarkerWithTimings {
             label = profile.intern_string(&span.span_type.to_string());
         }
 
-        let category = category_handles
+        let category = *category_handles
             .entry(category_str.to_string())
-            .or_insert_with(|| profile.add_category(&category_str, CategoryColor::Green))
-            .clone();
+            .or_insert_with(|| profile.add_category(category_str, CategoryColor::Green));
 
         let extra_fields = field_values
             .iter()
@@ -593,7 +592,7 @@ impl SpanMarkerWithTimings {
             name: profile.intern_string(&marker.message),
             action: profile.intern_string(&span.action),
             view_id: profile.intern_string(&span.view_id),
-            marker_type: marker_type.clone(),
+            marker_type: *marker_type,
             extra_fields,
         }
     }
@@ -617,7 +616,7 @@ impl Marker for SpanMarkerWithTimings {
             2 => self.name,
             3 => self.action,
             4 => self.view_id,
-            i => self.extra_fields.get(i as usize - 5).unwrap().clone(),
+            i => *self.extra_fields.get(i as usize - 5).unwrap(),
         }
     }
 
@@ -645,7 +644,7 @@ impl EventMarker {
         category: &CategoryHandle,
         marker: &MarkerOnThread,
         marker_type: &MarkerTypeHandle,
-        field_values: &Vec<String>,
+        field_values: &[String],
     ) -> Self {
         let marker = &marker.event_or_span;
 
@@ -655,17 +654,17 @@ impl EventMarker {
             .collect();
 
         Self {
-            category: category.clone(),
+            category: *category,
             message: profile.intern_string(&marker.message),
             target: profile.intern_string(&marker.target),
-            marker_type: marker_type.clone(),
+            marker_type: *marker_type,
             extra_fields,
         }
     }
 
     pub fn create_marker_type(
         profile: &mut Profile,
-        extra_field_names: &Vec<String>,
+        extra_field_names: &[String],
     ) -> MarkerTypeHandle {
         let mut all_fields = vec![MarkerFieldSchema {
             key: "message".into(),
@@ -682,7 +681,7 @@ impl EventMarker {
         }));
 
         profile.register_marker_type(MarkerSchema {
-            type_name: format!("Event-{}", extra_field_names.join("_")).into(),
+            type_name: format!("Event-{}", extra_field_names.join("_")),
             locations: vec![MarkerLocation::MarkerChart, MarkerLocation::MarkerTable],
             chart_label: Some("{marker.data.message}".into()),
             tooltip_label: Some("{marker.data.message}".into()),
@@ -710,14 +709,12 @@ impl Marker for EventMarker {
     fn string_field_value(&self, field_index: u32) -> StringHandle {
         match field_index {
             0 => self.message,
-            i => self.extra_fields.get(i as usize - 1).unwrap().clone(),
+            i => *self.extra_fields.get(i as usize - 1).unwrap(),
         }
     }
 
-    fn number_field_value(&self, field_index: u32) -> f64 {
-        match field_index {
-            _ => unreachable!(),
-        }
+    fn number_field_value(&self, _field_index: u32) -> f64 {
+        unreachable!()
     }
 }
 
@@ -779,10 +776,8 @@ impl Marker for CustomGraphMarker {
         self.category
     }
 
-    fn string_field_value(&self, field_index: u32) -> StringHandle {
-        match field_index {
-            _ => unreachable!(),
-        }
+    fn string_field_value(&self, _field_index: u32) -> StringHandle {
+        unreachable!()
     }
 
     fn number_field_value(&self, field_index: u32) -> f64 {
