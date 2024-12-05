@@ -8,7 +8,7 @@ use serde_derive::Serialize;
 
 use super::profile::StringHandle;
 use super::timestamp::Timestamp;
-use crate::{CategoryHandle, Profile};
+use crate::{CategoryHandle, GraphColor, Profile};
 
 /// The handle for a marker. Returned from [`Profile::add_marker`].
 ///
@@ -221,6 +221,48 @@ impl<T: StaticSchemaMarker> Marker for T {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum MarkerGraphType {
+    Bar,
+    Line,
+    LineFilled,
+}
+
+impl Serialize for MarkerGraphType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match &self {
+            MarkerGraphType::Bar => "bar".serialize(serializer),
+            MarkerGraphType::Line => "line".serialize(serializer),
+            MarkerGraphType::LineFilled => "line-filled".serialize(serializer),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MarkerGraph {
+    pub key: String,
+    pub graph_type: MarkerGraphType,
+    pub color: Option<GraphColor>,
+}
+
+impl Serialize for MarkerGraph {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut map = serializer.serialize_map(None)?;
+        map.serialize_entry("key", &self.key)?;
+        map.serialize_entry("type", &self.graph_type)?;
+        if let Some(color) = &self.color {
+            map.serialize_entry("color", color)?;
+        }
+        map.end()
+    }
+}
+
 /// Describes a marker type, including the names and types of the marker's fields.
 ///
 /// Example:
@@ -268,6 +310,11 @@ impl<T: StaticSchemaMarker> Marker for T {
 ///         label: "Description".into(),
 ///         value: "This is a test marker with a custom schema.".into(),
 ///     }],
+///     graphs: vec![MarkerGraph {
+///         key: "temperature".into(),
+///         graph_type: MarkerGraphType::Line,
+///         color: Some(GraphColor::Red),
+///     }],
 /// };
 /// # }
 /// ```
@@ -308,6 +355,8 @@ pub struct MarkerSchema {
     /// The static fields of this marker type, with fixed values that apply to all markers of this type.
     /// These are usually used for things like a human readable marker type description.
     pub static_fields: Vec<MarkerStaticField>,
+
+    pub graphs: Vec<MarkerGraph>,
 }
 
 #[derive(Debug, Clone)]
@@ -331,6 +380,8 @@ pub struct InternalMarkerSchema {
     /// The static fields of this marker type, with fixed values that apply to all markers.
     /// These are usually used for things like a human readable marker type description.
     static_fields: Vec<MarkerStaticField>,
+
+    graphs: Vec<MarkerGraph>,
 }
 
 impl From<MarkerSchema> for InternalMarkerSchema {
@@ -355,6 +406,7 @@ impl From<MarkerSchema> for InternalMarkerSchema {
             string_field_count,
             number_field_count,
             static_fields: schema.static_fields,
+            graphs: schema.graphs,
         }
     }
 }
@@ -389,6 +441,7 @@ impl InternalMarkerSchema {
             map.serialize_entry("tableLabel", label)?;
         }
         map.serialize_entry("data", &SerializableSchemaFields(self))?;
+        map.serialize_entry("graphs", &SerializableSchemaGraphs(self))?;
         map.end()
     }
 
@@ -403,6 +456,17 @@ impl InternalMarkerSchema {
         }
         for field in &self.static_fields {
             seq.serialize_element(field)?;
+        }
+        seq.end()
+    }
+
+    fn serialize_graphs<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(self.graphs.len()))?;
+        for graph in &self.graphs {
+            seq.serialize_element(graph)?;
         }
         seq.end()
     }
@@ -425,6 +489,17 @@ impl Serialize for SerializableSchemaFields<'_> {
         S: serde::Serializer,
     {
         self.0.serialize_fields(serializer)
+    }
+}
+
+struct SerializableSchemaGraphs<'a>(&'a InternalMarkerSchema);
+
+impl<'a> Serialize for SerializableSchemaGraphs<'a> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize_graphs(serializer)
     }
 }
 
