@@ -186,6 +186,7 @@ impl StaticSchemaMarker for ThreadNameMarkerForCpuTrack {
                 searchable: true,
             }],
             static_fields: vec![],
+            graphs: vec![],
         }
     }
 
@@ -240,6 +241,7 @@ impl StaticSchemaMarker for OnCpuMarkerForThreadTrack {
                 },
             ],
             static_fields: vec![],
+            graphs: vec![],
         }
     }
 
