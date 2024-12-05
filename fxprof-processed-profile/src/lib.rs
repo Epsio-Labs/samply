@@ -69,9 +69,9 @@ pub use graph_color::GraphColor;
 pub use lib_mappings::LibMappings;
 pub use library_info::{LibraryInfo, Symbol, SymbolTable};
 pub use markers::{
-    Marker, MarkerFieldFormat, MarkerFieldFormatKind, MarkerFieldSchema, MarkerHandle,
-    MarkerLocation, MarkerSchema, MarkerStaticField, MarkerTiming, MarkerTypeHandle,
-    StaticSchemaMarker,
+    Marker, MarkerFieldFormat, MarkerFieldFormatKind, MarkerFieldSchema, MarkerGraph,
+    MarkerGraphType, MarkerHandle, MarkerLocation, MarkerSchema, MarkerStaticField, MarkerTiming,
+    MarkerTypeHandle, StaticSchemaMarker,
 };
 pub use process::ThreadHandle;
 pub use profile::{Profile, SamplingInterval, StringHandle};
