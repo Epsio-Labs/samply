@@ -16,7 +16,7 @@ use crate::shared::jitdump_manager::JitDumpManager;
 use crate::shared::lib_mappings::{LibMappingAdd, LibMappingInfo, LibMappingOp, LibMappingOpQueue};
 use crate::shared::marker_file::get_markers;
 use crate::shared::perf_map::try_load_perf_map;
-use crate::shared::process_sample_data::{MarkerOnThread, ProcessSampleData};
+use crate::shared::process_sample_data::{CounterOnThread, MarkerOnThread, ProcessSampleData};
 use crate::shared::recycling::{ProcessRecyclingData, ThreadRecycler};
 use crate::shared::synthetic_jit_library::SyntheticJitLibrary;
 use crate::shared::timestamp_converter::TimestampConverter;
@@ -250,11 +250,14 @@ where
         }
 
         let mut counters = Vec::new();
-        for (_thread_handle, counter_file_path, lookup_dirs) in self.counter_file_paths {
+        for (thread_handle, counter_file_path, lookup_dirs) in self.counter_file_paths {
             if let Ok(counter_from_this_file) =
                 get_counter(&counter_file_path, &lookup_dirs, *timestamp_converter)
             {
-                counters.push(counter_from_this_file);
+                counters.push(CounterOnThread {
+                    thread_handle,
+                    counter: counter_from_this_file,
+                });
             }
         }
 
