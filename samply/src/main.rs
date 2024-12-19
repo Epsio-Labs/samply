@@ -383,6 +383,10 @@ pub struct ProfileCreationArgs {
     #[arg(long)]
     mmap_markers: bool,
 
+    /// Attach markers from profiled program to the thread that registered them rather than the main thread.
+    #[arg(long)]
+    markers_on_profiled_thread: bool,
+
     /// Include up to <INCLUDE_ARGS> command line arguments in the process name.
     /// This can help differentiate processes if the same executable is used
     /// for different types of programs. And in --reuse-threads mode it
@@ -556,6 +560,9 @@ impl ImportArgs {
             should_emit_jit_markers: self.profile_creation_args.jit_markers,
             should_emit_cswitch_markers: self.profile_creation_args.cswitch_markers,
             should_emit_mmap_markers: self.profile_creation_args.mmap_markers,
+            attach_markers_to_profiled_thread: self
+                .profile_creation_args
+                .markers_on_profiled_thread,
             coreclr: to_coreclr_profile_props(&self.coreclr),
             #[cfg(target_os = "windows")]
             unknown_event_markers: self.profile_creation_args.unknown_event_markers,
@@ -682,6 +689,9 @@ impl RecordArgs {
             should_emit_jit_markers: self.profile_creation_args.jit_markers,
             should_emit_cswitch_markers: self.profile_creation_args.cswitch_markers,
             should_emit_mmap_markers: self.profile_creation_args.mmap_markers,
+            attach_markers_to_profiled_thread: self
+                .profile_creation_args
+                .markers_on_profiled_thread,
             coreclr: to_coreclr_profile_props(&self.coreclr),
             #[cfg(target_os = "windows")]
             unknown_event_markers: self.profile_creation_args.unknown_event_markers,

@@ -104,6 +104,9 @@ pub struct ProfileCreationProps {
     /// Whether to emit markers for mmap events.
     #[allow(dead_code)]
     pub should_emit_mmap_markers: bool,
+    /// Whether to attach markers from profiled program to the profiled thread.
+    #[allow(dead_code)]
+    pub attach_markers_to_profiled_thread: bool,
 }
 
 impl ProfileCreationProps {
