@@ -113,6 +113,9 @@ where
 
     // Whether to emit mmap markers.
     should_emit_mmap_markers: bool,
+
+    // Whether to attach markers to the profiled thread rather than the main thread.
+    should_attach_markers_to_profiled_thread: bool,
 }
 
 const DEFAULT_OFF_CPU_SAMPLING_INTERVAL_NS: u64 = 1_000_000; // 1ms
@@ -280,6 +283,8 @@ where
             should_emit_jit_markers: profile_creation_props.should_emit_jit_markers,
             should_emit_cswitch_markers: profile_creation_props.should_emit_cswitch_markers,
             should_emit_mmap_markers: profile_creation_props.should_emit_mmap_markers,
+            should_attach_markers_to_profiled_thread: profile_creation_props
+                .attach_markers_to_profiled_thread,
         }
     }
 
@@ -885,8 +890,12 @@ where
         if filename.starts_with("marker-") && filename.ends_with(".txt") {
             let marker_file_path = Path::new(path);
             let process = self.processes.get_by_pid(pid, &mut self.profile);
-            let thread = process.threads.get_thread_by_tid(tid, &mut self.profile);
-            let profile_thread = thread.profile_thread;
+            let profile_thread = if self.should_attach_markers_to_profiled_thread {
+                let thread = process.threads.get_thread_by_tid(tid, &mut self.profile);
+                thread.profile_thread
+            } else {
+                process.threads.main_thread.profile_thread
+            };
             process.add_marker_file_path(
                 profile_thread,
                 marker_file_path,
