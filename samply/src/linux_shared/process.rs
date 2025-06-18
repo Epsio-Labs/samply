@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use framehop::Unwinder;
@@ -33,8 +34,8 @@ pub struct Process<U> {
     pub unresolved_samples: UnresolvedSamples,
     pub jit_app_cache_mapping_ops: LibMappingOpQueue,
     pub jit_function_recycler: Option<JitFunctionRecycler>,
-    marker_file_paths: Vec<(ThreadHandle, PathBuf, Vec<PathBuf>)>,
-    counter_file_paths: Vec<(ThreadHandle, PathBuf, Vec<PathBuf>)>,
+    marker_file_paths: HashMap<PathBuf, (ThreadHandle, Vec<PathBuf>)>,
+    counter_file_paths: HashMap<PathBuf, (ThreadHandle, Vec<PathBuf>)>,
     pub prev_mm_filepages_size: i64,
     pub prev_mm_anonpages_size: i64,
     pub prev_mm_swapents_size: i64,
@@ -81,8 +82,8 @@ where
             unresolved_samples: Default::default(),
             jit_app_cache_mapping_ops: LibMappingOpQueue::default(),
             jit_function_recycler,
-            marker_file_paths: Vec::new(),
-            counter_file_paths: Vec::new(),
+            marker_file_paths: HashMap::new(),
+            counter_file_paths: HashMap::new(),
             prev_mm_filepages_size: 0,
             prev_mm_anonpages_size: 0,
             prev_mm_swapents_size: 0,
@@ -180,8 +181,11 @@ where
         path: &Path,
         lookup_dirs: Vec<PathBuf>,
     ) {
-        self.marker_file_paths
-            .push((thread, path.to_owned(), lookup_dirs));
+        if !self.marker_file_paths.contains_key(path) {
+            self.marker_file_paths
+                .insert(path.to_owned(), (thread, lookup_dirs));
+            eprintln!("Registered marker file: {}", path.display());
+        }
     }
 
     pub fn add_counter_file_path(
@@ -190,8 +194,11 @@ where
         path: &Path,
         lookup_dirs: Vec<PathBuf>,
     ) {
-        self.counter_file_paths
-            .push((thread, path.to_owned(), lookup_dirs));
+        if !self.counter_file_paths.contains_key(path) {
+            self.counter_file_paths
+                .insert(path.to_owned(), (thread, lookup_dirs));
+            eprintln!("Registered counter file: {}", path.display());
+        }
     }
 
     pub fn notify_dead(&mut self, end_time: Timestamp, profile: &mut Profile) {
@@ -231,7 +238,7 @@ where
         }
 
         let mut markers = Vec::new();
-        for (thread_handle, marker_file_path, lookup_dirs) in self.marker_file_paths {
+        for (marker_file_path, (thread_handle, lookup_dirs)) in self.marker_file_paths {
             if let Ok(markers_from_this_file) =
                 get_markers(&marker_file_path, &lookup_dirs, *timestamp_converter)
             {
@@ -247,7 +254,7 @@ where
         }
 
         let mut counters = Vec::new();
-        for (thread_handle, counter_file_path, lookup_dirs) in self.counter_file_paths {
+        for (counter_file_path, (thread_handle, lookup_dirs)) in self.counter_file_paths {
             if let Ok(counter_from_this_file) =
                 get_counter(&counter_file_path, &lookup_dirs, *timestamp_converter)
             {
