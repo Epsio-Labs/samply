@@ -1,3 +1,5 @@
+use linux_perf_data::linux_perf_event_reader::TaskWasPreempted;
+
 /// Accumulates thread running times (for "CPU deltas") and simulates off-cpu sampling,
 /// with the help of context switch events.
 ///
@@ -34,17 +36,22 @@
 /// If yes, turn it into an off-cpu sampling group and consume a multiple of the interval.
 /// If no, don't emit any samples. The next sample's cpu delta will just be smaller.
 pub struct ContextSwitchHandler {
-    off_cpu_sampling_interval_ns: u64,
+    off_cpu_sampling_interval_ns: Option<u64>,
 }
 
 impl ContextSwitchHandler {
-    pub fn new(off_cpu_sampling_interval_ns: u64) -> Self {
+    pub fn new(off_cpu_sampling_interval_ns: Option<u64>) -> Self {
         Self {
             off_cpu_sampling_interval_ns,
         }
     }
 
-    pub fn handle_switch_out(&self, timestamp: u64, thread: &mut ThreadContextSwitchData) {
+    pub fn handle_switch_out(
+        &self,
+        timestamp: u64,
+        thread: &mut ThreadContextSwitchData,
+        preempted: Option<TaskWasPreempted>,
+    ) {
         match &thread.state {
             ThreadState::Unknown => {
                 // This "switch-out" is the first time we've heard of the thread. So it must
@@ -53,6 +60,7 @@ impl ContextSwitchHandler {
                 // Just store the new state.
                 thread.state = ThreadState::Off {
                     off_switch_timestamp: timestamp,
+                    preempted: None,
                 };
             }
 
@@ -67,6 +75,7 @@ impl ContextSwitchHandler {
 
                 thread.state = ThreadState::Off {
                     off_switch_timestamp: timestamp,
+                    preempted: preempted,
                 };
             }
             ThreadState::Off { .. } => {
@@ -104,16 +113,18 @@ impl ContextSwitchHandler {
             }
             ThreadState::Off {
                 off_switch_timestamp,
+                preempted,
             } => {
                 // The thread was sleeping and is now starting to run again.
-                // Accumulate the off-cpu time.
-                let off_duration = timestamp - off_switch_timestamp;
-                thread.off_cpu_duration_since_last_off_cpu_sample += off_duration;
-
-                // We just added some off-cpu time. If the accumulated off-cpu time exceeds the
-                // off-cpu sampling interval, we want to consume some of it and turn it into an
-                // off-cpu sampling group.
-                self.maybe_consume_off_cpu(timestamp, thread)
+                // Accumulate the off-cpu time, only if we know for sure it wasn't due to preemption.
+                if matches!(preempted, Some(TaskWasPreempted::No)) {
+                    // We just added some off-cpu time. If the accumulated off-cpu time exceeds the
+                    // off-cpu sampling interval, we want to consume some of it and turn it into an
+                    // off-cpu sampling group.
+                    self.maybe_consume_off_cpu(timestamp, off_switch_timestamp, thread)
+                } else {
+                    None
+                }
             }
             ThreadState::Unknown => {
                 // This "switch-in" is the first time we've heard of the thread.
@@ -151,17 +162,16 @@ impl ContextSwitchHandler {
             }
             ThreadState::Off {
                 off_switch_timestamp,
+                preempted,
             } => {
-                // The last time we heard from this thread, it was being context switched away from.
-                // We are processing a sample on it so we know it is running again. Treat this sample
-                // as a switch-in event.
-                let off_duration = timestamp - off_switch_timestamp;
-                thread.off_cpu_duration_since_last_off_cpu_sample += off_duration;
-
-                // We just added some off-cpu time. If the accumulated off-cpu time exceeds the
-                // off-cpu sampling interval, we want to consume some of it and turn it into an
-                // off-cpu sampling group.
-                self.maybe_consume_off_cpu(timestamp, thread)
+                if matches!(preempted, Some(TaskWasPreempted::No)) {
+                    // The last time we heard from this thread, it was being context switched away from.
+                    // We are processing a sample on it so we know it is running again. Treat this sample
+                    // as a switch-in event.
+                    self.maybe_consume_off_cpu(timestamp, off_switch_timestamp, thread)
+                } else {
+                    None
+                }
             }
             ThreadState::Unknown => {
                 // This sample is the first time we've ever head from a thread.
@@ -181,40 +191,52 @@ impl ContextSwitchHandler {
 
     fn maybe_consume_off_cpu(
         &self,
-        timestamp: u64,
+        now_timestamp: u64,
+        off_switch_timestamp: u64,
         thread: &mut ThreadContextSwitchData,
     ) -> Option<OffCpuSampleGroup> {
-        // If the accumulated off-cpu time exceeds the off-cpu sampling interval,
-        // we want to consume some of it and turn it into an off-cpu sampling group.
-        let interval = self.off_cpu_sampling_interval_ns;
-        if thread.off_cpu_duration_since_last_off_cpu_sample < interval {
-            return None;
+        if let Some(interval) = self.off_cpu_sampling_interval_ns {
+            let off_duration = now_timestamp - off_switch_timestamp;
+            thread.off_cpu_duration_since_last_off_cpu_sample += off_duration;
+            // If the accumulated off-cpu time exceeds the off-cpu sampling interval,
+            // we want to consume some of it and turn it into an off-cpu sampling group.
+            if thread.off_cpu_duration_since_last_off_cpu_sample < interval {
+                return None;
+            }
+
+            // Let's turn the accumulated off-cpu time into an off-cpu sample group.
+            let sample_count = thread.off_cpu_duration_since_last_off_cpu_sample / interval;
+            debug_assert!(sample_count >= 1);
+
+            let consumed_duration = sample_count * interval;
+            let remaining_duration =
+                thread.off_cpu_duration_since_last_off_cpu_sample - consumed_duration;
+
+            let begin_timestamp =
+                now_timestamp - (thread.off_cpu_duration_since_last_off_cpu_sample - interval);
+            let end_timestamp = now_timestamp - remaining_duration;
+            debug_assert_eq!(
+                end_timestamp - begin_timestamp,
+                (sample_count - 1) * interval
+            );
+
+            // Consume the consumed duration and save the leftover duration.
+            thread.off_cpu_duration_since_last_off_cpu_sample = remaining_duration;
+
+            Some(OffCpuSampleGroup {
+                begin_timestamp,
+                end_timestamp,
+                sample_count,
+            })
+        } else {
+            // No need to simulate sampling because the context switch events are already sampled,
+            // just output a group for the whole region.
+            Some(OffCpuSampleGroup {
+                begin_timestamp: off_switch_timestamp,
+                end_timestamp: now_timestamp,
+                sample_count: 2,
+            })
         }
-
-        // Let's turn the accumulated off-cpu time into an off-cpu sample group.
-        let sample_count = thread.off_cpu_duration_since_last_off_cpu_sample / interval;
-        debug_assert!(sample_count >= 1);
-
-        let consumed_duration = sample_count * interval;
-        let remaining_duration =
-            thread.off_cpu_duration_since_last_off_cpu_sample - consumed_duration;
-
-        let begin_timestamp =
-            timestamp - (thread.off_cpu_duration_since_last_off_cpu_sample - interval);
-        let end_timestamp = timestamp - remaining_duration;
-        debug_assert_eq!(
-            end_timestamp - begin_timestamp,
-            (sample_count - 1) * interval
-        );
-
-        // Consume the consumed duration and save the leftover duration.
-        thread.off_cpu_duration_since_last_off_cpu_sample = remaining_duration;
-
-        Some(OffCpuSampleGroup {
-            begin_timestamp,
-            end_timestamp,
-            sample_count,
-        })
     }
 
     pub fn consume_cpu_delta(&self, thread: &mut ThreadContextSwitchData) -> u64 {
@@ -242,6 +264,7 @@ enum ThreadState {
     Unknown,
     Off {
         off_switch_timestamp: u64,
+        preempted: Option<TaskWasPreempted>,
     },
     On {
         last_observed_on_timestamp: u64,
@@ -268,23 +291,23 @@ mod test {
         //  v Off-cpu sample
 
         let mut thread = ThreadContextSwitchData::default();
-        let handler = ContextSwitchHandler::new(10);
+        let handler = ContextSwitchHandler::new(Some(10));
         let s = handler.handle_switch_in(0, &mut thread);
         assert_eq!(s, None);
-        handler.handle_switch_out(3, &mut thread);
+        handler.handle_switch_out(3, &mut thread, None);
         let s = handler.handle_switch_in(5, &mut thread);
         assert_eq!(s, None);
         let s = handler.handle_on_cpu_sample(12, &mut thread);
         let delta = handler.consume_cpu_delta(&mut thread);
         assert_eq!(s, None);
         assert_eq!(delta, 10);
-        handler.handle_switch_out(13, &mut thread);
+        handler.handle_switch_out(13, &mut thread, None);
         let s = handler.handle_switch_in(15, &mut thread);
         assert_eq!(s, None);
-        handler.handle_switch_out(16, &mut thread);
+        handler.handle_switch_out(16, &mut thread, None);
         let s = handler.handle_switch_in(21, &mut thread);
         assert_eq!(s, None);
-        handler.handle_switch_out(23, &mut thread);
+        handler.handle_switch_out(23, &mut thread, None);
         let s = handler.handle_switch_in(27, &mut thread);
         assert_eq!(
             s,
@@ -296,7 +319,7 @@ mod test {
         );
         let delta = handler.consume_cpu_delta(&mut thread);
         assert_eq!(delta, 4);
-        handler.handle_switch_out(30, &mut thread);
+        handler.handle_switch_out(30, &mut thread, None);
         let s = handler.handle_switch_in(48, &mut thread);
         assert_eq!(
             s,

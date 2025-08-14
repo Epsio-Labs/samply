@@ -158,11 +158,15 @@ where
         if let Some(linux_version) = linux_version {
             profile.set_os_name(&format!("Linux {linux_version}"));
         }
-        let (off_cpu_sampling_interval_ns, off_cpu_weight_per_sample) =
-            match &interpretation.sampling_is_time_based {
-                Some(interval_ns) => (*interval_ns, 1),
-                None => (DEFAULT_OFF_CPU_SAMPLING_INTERVAL_NS, 0),
-            };
+        let (off_cpu_sampling_interval_ns, off_cpu_weight_per_sample) = match (
+            &interpretation.sampling_is_time_based,
+            &interpretation.cswitch_sampling_is_time_based,
+        ) {
+            (_, true) => (None, 1),
+            (Some(interval), false) => (Some(*interval), 1),
+            (None, false) => (Some(DEFAULT_OFF_CPU_SAMPLING_INTERVAL_NS), 0),
+        };
+
         let kernel_symbols = KernelSymbols::new_for_running_kernel().ok();
 
         let timestamp_converter = TimestampConverter {
@@ -337,6 +341,7 @@ where
             cpu_delta,
             1,
             None,
+            false,
         );
 
         if let (Some(cpu_index), Some(cpus)) = (e.cpu, &mut self.cpus) {
@@ -372,6 +377,7 @@ where
                 cpu_delta,
                 1,
                 Some(label_frame),
+                false,
             );
 
             let label_frame = self.profile.handle_for_frame_with_label(
@@ -388,6 +394,7 @@ where
                 CpuDelta::ZERO,
                 1,
                 Some(label_frame),
+                false,
             );
         }
     }
@@ -428,8 +435,11 @@ where
             // Treat this sched_switch sample as a switch-out.
             // Sometimes we have sched_switch samples but no context switch records; for
             // example when using `simpleperf record --trace-offcpu`.
-            self.context_switch_handler
-                .handle_switch_out(timestamp_mono, &mut thread.context_switch_data);
+            self.context_switch_handler.handle_switch_out(
+                timestamp_mono,
+                &mut thread.context_switch_data,
+                None,
+            );
         }
 
         if let (Some(cpu_index), Some(cpus)) = (e.cpu, &mut self.cpus) {
@@ -935,6 +945,7 @@ where
                             cpu_delta,
                             0,
                             Some(idle_frame_label),
+                            false,
                         );
 
                         // Emit a "rest sample" with a CPU delta of zero covering the rest of the paused range.
@@ -949,6 +960,7 @@ where
                             CpuDelta::from_nanos(0),
                             0,
                             Some(idle_frame_label),
+                            false,
                         );
                     }
                     if self.should_emit_cswitch_markers {
@@ -964,13 +976,19 @@ where
                 }
             }
             ContextSwitchRecord::Out { preempted, .. } => {
-                self.context_switch_handler
-                    .handle_switch_out(timestamp, &mut thread.context_switch_data);
+                self.context_switch_handler.handle_switch_out(
+                    timestamp,
+                    &mut thread.context_switch_data,
+                    Some(preempted),
+                );
                 if let (Some(cpus), Some(cpu_index)) = (&mut self.cpus, Some(common.cpu.unwrap())) {
                     let combined_thread = cpus.combined_thread_handle();
                     let cpu = cpus.get_mut(cpu_index as usize, &mut self.profile);
-                    self.context_switch_handler
-                        .handle_switch_out(timestamp, &mut cpu.context_switch_data);
+                    self.context_switch_handler.handle_switch_out(
+                        timestamp,
+                        &mut cpu.context_switch_data,
+                        Some(preempted),
+                    );
                     if self.should_emit_cswitch_markers {
                         cpu.notify_switch_out_for_marker(
                             tid,
@@ -1861,10 +1879,15 @@ fn process_off_cpu_sample_group(
         sample_count,
     } = off_cpu_sample;
 
-    // Add a sample at the beginning of the paused range.
-    // This "first sample" will carry any leftover accumulated running time ("cpu delta").
-    let cpu_delta = CpuDelta::from_nanos(cpu_delta_ns);
-    let weight = off_cpu_weight_per_sample;
+    // Set off-cpu delta as the time spent not on-cpu during the interval.
+    // That is, being completely idle would display as 100% off-cpu.
+    // If the sampling is exact, there should only be two "offcpu" samples with no "oncpu"
+    // samples between them, so the delta would be zero.
+    // The off-cpu delta is not set on the first sample to avoid combining with a previous on-cpu sample.
+    let duration = end_timestamp.saturating_sub(begin_timestamp);
+    let offcpu_delta_ns = duration.saturating_sub(cpu_delta_ns);
+    let cpu_delta = CpuDelta::from_nanos(0);
+    let weight = 0;
     let stack = off_cpu_stack;
     let profile_timestamp = timestamp_converter.convert_time(begin_timestamp);
     samples.add_sample(
@@ -1875,11 +1898,12 @@ fn process_off_cpu_sample_group(
         cpu_delta,
         weight,
         None,
+        true,
     );
 
     if sample_count > 1 {
         // Emit a "rest sample" with a CPU delta of zero covering the rest of the paused range.
-        let cpu_delta = CpuDelta::from_nanos(0);
+        let cpu_delta = CpuDelta::from_nanos(offcpu_delta_ns);
         let weight = i32::try_from(sample_count - 1).unwrap_or(0) * off_cpu_weight_per_sample;
         let profile_timestamp = timestamp_converter.convert_time(end_timestamp);
         samples.add_sample(
@@ -1890,6 +1914,7 @@ fn process_off_cpu_sample_group(
             cpu_delta,
             weight,
             None,
+            true,
         );
     }
 }

@@ -251,18 +251,21 @@ where
             }
         }
 
-        let user_category = profile
-            .handle_for_category(Category("User", CategoryColor::Yellow))
-            .into();
-        let kernel_category = profile
-            .handle_for_category(Category("Kernel", CategoryColor::Orange))
-            .into();
+        let user_category = profile.handle_for_category(Category("User", CategoryColor::Yellow));
+        let kernel_category =
+            profile.handle_for_category(Category("Kernel", CategoryColor::Orange));
+        let offcpu_user_category =
+            profile.handle_for_category(Category("User (offcpu)", CategoryColor::LightGreen));
+        let offcpu_kernel_category =
+            profile.handle_for_category(Category("Kernel (offcpu)", CategoryColor::LightBlue));
         let mut stack_frame_scratch_buf = Vec::new();
         for process_sample_data in self.process_sample_datas {
             process_sample_data.flush_samples_to_profile(
                 profile,
-                user_category,
-                kernel_category,
+                user_category.into(),
+                kernel_category.into(),
+                offcpu_user_category.into(),
+                offcpu_kernel_category.into(),
                 &mut stack_frame_scratch_buf,
                 unresolved_stacks,
             );

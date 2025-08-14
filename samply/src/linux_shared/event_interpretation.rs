@@ -28,6 +28,7 @@ pub struct EventInterpretation {
     #[allow(unused)]
     pub main_event_name: String,
     pub sampling_is_time_based: Option<u64>,
+    pub cswitch_sampling_is_time_based: bool,
     pub off_cpu_indicator: Option<OffCpuIndicator>,
     pub sched_switch_attr_index: Option<usize>,
     pub known_event_indices: HashMap<usize, KnownEvent>,
@@ -71,6 +72,18 @@ impl EventInterpretation {
             (false, Some(_)) => Some(OffCpuIndicator::SchedSwitchAndSamples),
             _ => None,
         };
+        let cswitch_sampling_is_time_based = attrs
+            .iter()
+            .find(|attr_desc| {
+                matches!(
+                    (attr_desc.attr.type_, attr_desc.attr.sampling_policy),
+                    (
+                        PerfEventType::Software(SoftwareCounterType::ContextSwitches),
+                        SamplingPolicy::Frequency(_),
+                    )
+                )
+            })
+            .is_some();
         let mut known_event_indices = HashMap::new();
 
         let known_events = [
@@ -105,6 +118,7 @@ impl EventInterpretation {
             main_event_attr_index,
             main_event_name,
             sampling_is_time_based,
+            cswitch_sampling_is_time_based,
             off_cpu_indicator,
             sched_switch_attr_index,
             known_event_indices,

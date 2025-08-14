@@ -103,7 +103,7 @@ pub fn run(
     };
     let initial_exec_name_and_cmdline = (initial_exec_name, initial_cmdline);
     let observer_thread = thread::spawn(move || {
-        let mut converter = make_converter(interval, profile_creation_props);
+        let mut converter = make_converter(&recording_props, &profile_creation_props);
 
         // Wait for the initial pid to profile.
         let SamplerRequest::StartProfilingAnotherProcess(pid, attach_mode) =
@@ -261,7 +261,7 @@ fn start_profiling_pid(
             let interval = recording_props.interval;
             let time_limit = recording_props.time_limit;
             let cswitch_interval = recording_props.cswitch_interval;
-            let mut converter = make_converter(interval, profile_creation_props);
+            let mut converter = make_converter(&recording_props, &profile_creation_props);
             let SamplerRequest::StartProfilingAnotherProcess(pid, attach_mode) =
                 profile_another_pid_request_receiver.recv().unwrap()
             else {
@@ -321,11 +321,11 @@ fn paranoia_level() -> Option<u32> {
 }
 
 fn make_converter(
-    interval: Duration,
-    profile_creation_props: ProfileCreationProps,
+    recording_props: &RecordingProps,
+    profile_creation_props: &ProfileCreationProps,
 ) -> Converter<framehop::UnwinderNative<MmapRangeOrVec, framehop::MayAllocateDuringUnwind>> {
-    let interval_nanos = if interval.as_nanos() > 0 {
-        interval.as_nanos() as u64
+    let interval_nanos = if recording_props.interval.as_nanos() > 0 {
+        recording_props.interval.as_nanos() as u64
     } else {
         1_000_000 // 1 million nano seconds = 1 milli second
     };
@@ -337,11 +337,15 @@ fn make_converter(
     } else {
         Endianness::BigEndian
     };
+
+    let cswitch_sampling_is_time_based = recording_props.cswitch_interval.is_some();
+
     let machine_info = uname::uname().ok();
     let interpretation = EventInterpretation {
         main_event_attr_index: 0,
         main_event_name: "cycles".to_string(),
         sampling_is_time_based: Some(interval_nanos),
+        cswitch_sampling_is_time_based,
         off_cpu_indicator: Some(OffCpuIndicator::ContextSwitches),
         sched_switch_attr_index: None,
         known_event_indices: HashMap::new(),

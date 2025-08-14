@@ -35,6 +35,7 @@ impl UnresolvedSamples {
         cpu_delta: CpuDelta,
         weight: i32,
         extra_label_frame: Option<FrameHandle>,
+        off_cpu: bool,
     ) {
         let sample_index = self.samples_and_markers.len();
         self.samples_and_markers.push(UnresolvedSampleOrMarker {
@@ -43,7 +44,11 @@ impl UnresolvedSamples {
             timestamp_mono,
             stack,
             extra_label_frame,
-            sample_or_marker: SampleOrMarker::Sample(SampleData { weight, cpu_delta }),
+            sample_or_marker: SampleOrMarker::Sample(SampleData {
+                weight,
+                cpu_delta,
+                off_cpu,
+            }),
         });
         self.prev_sample_info_per_thread.insert(
             thread_handle,
@@ -86,6 +91,7 @@ impl UnresolvedSamples {
                         sample_or_marker: SampleOrMarker::Sample(SampleData {
                             weight,
                             cpu_delta: CpuDelta::ZERO,
+                            off_cpu: false,
                         }),
                     });
                     sample_info.prev_sample_index_if_zero_cpu = Some(sample_index);
@@ -103,6 +109,7 @@ impl UnresolvedSamples {
                     sample_or_marker: SampleOrMarker::Sample(SampleData {
                         weight,
                         cpu_delta: CpuDelta::ZERO,
+                        off_cpu: false,
                     }),
                 });
                 entry.insert(PreviousSampleInfo {
@@ -152,6 +159,7 @@ pub enum SampleOrMarker {
 pub struct SampleData {
     pub cpu_delta: CpuDelta,
     pub weight: i32,
+    pub off_cpu: bool,
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]

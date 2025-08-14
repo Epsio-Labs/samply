@@ -80,6 +80,8 @@ impl ProcessSampleData {
         profile: &mut Profile,
         user_category: SubcategoryHandle,
         kernel_category: SubcategoryHandle,
+        offcpu_user_category: SubcategoryHandle,
+        offcpu_kernel_category: SubcategoryHandle,
         stack_frame_scratch_buf: &mut Vec<StackFrame>,
         stacks: &UnresolvedStacks,
     ) {
@@ -100,6 +102,9 @@ impl ProcessSampleData {
             lib_mappings_hierarchy.add_perf_map_mappings(perf_map_mappings);
         }
         let mut stack_converter = StackConverter::new(user_category, kernel_category);
+        let mut offcpu_stack_converter =
+            StackConverter::new(offcpu_user_category, offcpu_kernel_category);
+
         let samples = unresolved_samples.into_inner();
         for sample in samples {
             lib_mappings_hierarchy.process_ops(sample.timestamp_mono);
@@ -112,20 +117,33 @@ impl ProcessSampleData {
                 ..
             } = sample;
 
+            let is_off_cpu = matches!(
+                sample_or_marker,
+                SampleOrMarker::Sample(SampleData { off_cpu: true, .. })
+            );
+
+            let (category, converter) = if is_off_cpu {
+                (offcpu_user_category, &mut offcpu_stack_converter)
+            } else {
+                (user_category, &mut stack_converter)
+            };
+
             stack_frame_scratch_buf.clear();
             stacks.convert_back(stack, stack_frame_scratch_buf);
-            let frames = stack_converter.convert_stack(
+            let frames = converter.convert_stack(
                 thread_handle,
                 stack_frame_scratch_buf,
                 &lib_mappings_hierarchy,
                 extra_label_frame,
             );
             let mut frames =
-                StackDepthLimitingFrameIter::new(profile, frames, thread_handle, user_category);
+                StackDepthLimitingFrameIter::new(profile, frames, thread_handle, category);
             let stack_handle =
                 profile.handle_for_stack_frames(thread_handle, move |p| frames.next(p));
             match sample_or_marker {
-                SampleOrMarker::Sample(SampleData { cpu_delta, weight }) => {
+                SampleOrMarker::Sample(SampleData {
+                    cpu_delta, weight, ..
+                }) => {
                     profile.add_sample(thread_handle, timestamp, stack_handle, cpu_delta, weight);
                 }
                 SampleOrMarker::MarkerHandle(mh) => {
