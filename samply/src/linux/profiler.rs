@@ -91,6 +91,7 @@ pub fn run(
 
     // Launch the observer thread. This thread will manage the perf events.
     let interval = recording_props.interval;
+    let cswitch_interval = recording_props.cswitch_interval;
     let time_limit = recording_props.time_limit;
     let initial_exec_name = command_name.to_string_lossy().to_string();
     let initial_cmdline: Vec<String> = std::iter::once(initial_exec_name.clone())
@@ -112,7 +113,8 @@ pub fn run(
         };
 
         // Create the perf events, setting ENABLE_ON_EXEC.
-        let perf_group = init_profiler(interval, pid, attach_mode, &mut converter);
+        let perf_group =
+            init_profiler(interval, cswitch_interval, pid, attach_mode, &mut converter);
 
         // Tell the main thread to tell the child process to begin executing.
         profile_another_pid_reply_sender.send(true).unwrap();
@@ -258,13 +260,15 @@ fn start_profiling_pid(
         move || {
             let interval = recording_props.interval;
             let time_limit = recording_props.time_limit;
+            let cswitch_interval = recording_props.cswitch_interval;
             let mut converter = make_converter(interval, profile_creation_props);
             let SamplerRequest::StartProfilingAnotherProcess(pid, attach_mode) =
                 profile_another_pid_request_receiver.recv().unwrap()
             else {
                 panic!("The first message should be a StartProfilingAnotherProcess")
             };
-            let perf_group = init_profiler(interval, pid, attach_mode, &mut converter);
+            let perf_group =
+                init_profiler(interval, cswitch_interval, pid, attach_mode, &mut converter);
 
             // Tell the main thread that we are now executing.
             profile_another_pid_reply_sender.send(true).unwrap();
@@ -369,19 +373,23 @@ fn make_converter(
 
 fn init_profiler(
     interval: Duration,
+    cswitch_interval: Option<Duration>,
     pid: u32,
     attach_mode: AttachMode,
     converter: &mut Converter<
         framehop::UnwinderNative<MmapRangeOrVec, framehop::MayAllocateDuringUnwind>,
     >,
 ) -> PerfGroup {
-    let interval_nanos = if interval.as_nanos() > 0 {
-        interval.as_nanos() as u64
-    } else {
-        1_000_000 // 1 million nano seconds = 1 milli second
+    let interval_to_frequency = |interval: Duration| {
+        if interval.as_nanos() > 0 {
+            (1_000_000_000 / interval.as_nanos() as u64) as u32
+        } else {
+            1000_u32 // 1000Hz == every 1ms
+        }
     };
 
-    let frequency = (1_000_000_000 / interval_nanos) as u32;
+    let frequency = interval_to_frequency(interval);
+    let cswitch_frequency = cswitch_interval.map(interval_to_frequency);
     let stack_size = 32000;
     let regs_mask = ConvertRegsNative::regs_mask();
 
@@ -392,6 +400,7 @@ fn init_profiler(
         EventSource::HwCpuCycles,
         regs_mask,
         attach_mode,
+        cswitch_frequency,
     );
 
     if let Err(error) = &perf {
@@ -429,6 +438,7 @@ fn init_profiler(
                 EventSource::SwCpuClock,
                 regs_mask,
                 attach_mode,
+                cswitch_frequency,
             );
             match perf {
                 Ok(perf) => perf, // Success!
@@ -601,6 +611,7 @@ fn run_profiler(
 
         perf.consume_events(&mut |event_ref| {
             let record = event_ref.get();
+            let event_source = event_ref.event_source();
             let parsed_record = record.parse().unwrap();
             // debug!("Recording parsed_record: {:#?}", parsed_record);
 
@@ -614,13 +625,14 @@ fn run_profiler(
             }
 
             match parsed_record {
-                EventRecord::Sample(e) => {
-                    converter.handle_main_event_sample::<ConvertRegsNative>(&e);
-                    /*
-                    } else if interpretation.sched_switch_attr_index == Some(attr_index) {
-                        converter.handle_sched_switch_sample::<C>(e);
-                    }*/
-                }
+                EventRecord::Sample(e) => match event_source {
+                    EventSource::HwCpuCycles | EventSource::SwCpuClock => {
+                        converter.handle_main_event_sample::<ConvertRegsNative>(&e)
+                    }
+                    EventSource::SwContextSwitches => {
+                        converter.handle_sched_switch_sample::<ConvertRegsNative>(&e)
+                    }
+                },
                 EventRecord::Fork(e) => {
                     converter.handle_fork(e);
                 }

@@ -41,6 +41,8 @@ pub struct RecordingProps {
     pub browsers: bool,
     #[allow(dead_code)]
     pub keep_etl: bool,
+    #[allow(dead_code)]
+    pub cswitch_interval: Option<Duration>,
 }
 
 /// Which process(es) to record.

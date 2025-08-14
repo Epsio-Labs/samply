@@ -196,6 +196,15 @@ pub struct RecordArgs {
     #[cfg(target_os = "windows")]
     #[arg(long)]
     pub keep_etl: bool,
+
+    /// Sample context switch stacks for off-cpu graphs.
+    #[cfg(target_os = "linux")]
+    #[arg(long)]
+    cswitch_sampling: bool,
+
+    /// Sampling rate for context switch stacks, in Hz. Defaults to main rate if unspecified.
+    #[arg(long, requires = "cswitch_sampling")]
+    cswitch_rate: Option<f64>,
 }
 
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
@@ -426,17 +435,28 @@ impl RecordArgs {
         self.symbol_args.symbol_props()
     }
 
-    #[allow(unused)]
-    pub fn recording_props(&self) -> RecordingProps {
-        let time_limit = self.duration.map(Duration::from_secs_f64);
-        if self.rate <= 0.0 {
+    fn parse_rate(rate: f64) -> Duration {
+        if rate <= 0.0 {
             eprintln!(
                 "Error: sampling rate must be greater than zero, got {}",
-                self.rate
+                rate
             );
             std::process::exit(1);
         }
-        let interval = Duration::from_secs_f64(1.0 / self.rate);
+        Duration::from_secs_f64(1.0 / rate)
+    }
+
+    #[allow(unused)]
+    pub fn recording_props(&self) -> RecordingProps {
+        let time_limit = self.duration.map(Duration::from_secs_f64);
+        let interval = Self::parse_rate(self.rate);
+
+        let cswitch_interval = if self.cswitch_sampling {
+            Some(self.cswitch_rate.map(Self::parse_rate).unwrap_or(interval))
+        } else {
+            None
+        };
+
         RecordingProps {
             output_file: self.output.clone(),
             time_limit,
@@ -451,6 +471,7 @@ impl RecordArgs {
             keep_etl: self.keep_etl,
             #[cfg(not(target_os = "windows"))]
             keep_etl: false,
+            cswitch_interval,
         }
     }
 

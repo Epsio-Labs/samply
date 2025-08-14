@@ -9,6 +9,7 @@ use std::{cmp, fmt, io, mem, ptr, slice};
 
 use libc::{self, c_void, pid_t};
 use linux_perf_data::linux_perf_event_reader;
+use linux_perf_data::linux_perf_event_reader::constants::PERF_COUNT_SW_CONTEXT_SWITCHES;
 use linux_perf_event_reader::{Endianness, RawData, RawEventRecord, RecordParseInfo, RecordType};
 
 use super::sys::*;
@@ -84,6 +85,7 @@ pub struct Perf {
     buffer: *mut u8,
     size: u64,
     fd: RawFd,
+    event_source: EventSource,
     position: u64,
     parse_info: RecordParseInfo,
 }
@@ -148,6 +150,7 @@ fn next_raw_event(
 pub enum EventSource {
     HwCpuCycles,
     SwCpuClock,
+    SwContextSwitches,
 }
 
 #[derive(Clone, Debug)]
@@ -295,6 +298,10 @@ impl PerfBuilder {
                 attr.kind = PERF_TYPE_SOFTWARE;
                 attr.config = PERF_COUNT_SW_CPU_CLOCK;
             }
+            EventSource::SwContextSwitches => {
+                attr.kind = PERF_TYPE_SOFTWARE;
+                attr.config = PERF_COUNT_SW_CONTEXT_SWITCHES;
+            }
         }
 
         attr.sample_type = PERF_SAMPLE_IP
@@ -407,6 +414,7 @@ impl PerfBuilder {
             buffer,
             size,
             fd,
+            event_source,
             position: 0,
             parse_info,
         };
@@ -443,7 +451,6 @@ impl Perf {
 
     pub fn enable(&mut self) {
         let result = unsafe { libc::ioctl(self.fd, PERF_EVENT_IOC_ENABLE as _) };
-
         assert!(result != -1);
     }
 
@@ -526,6 +533,7 @@ pub struct EventRef {
     prev_position: u64,
     position: u64,
     parse_info: RecordParseInfo,
+    event_source: EventSource,
 }
 
 impl fmt::Debug for EventRef {
@@ -552,6 +560,10 @@ impl EventRef {
         let buffer = unsafe { slice::from_raw_parts(self.buffer.offset(4096), self.buffer_size) };
 
         self.event_location.get(buffer, self.parse_info)
+    }
+
+    pub fn event_source(&self) -> EventSource {
+        self.event_source
     }
 }
 
@@ -582,6 +594,7 @@ impl Iterator for EventIter<'_> {
             prev_position,
             position: perf.position,
             parse_info: self.perf.parse_info,
+            event_source: self.perf.event_source,
         })
     }
 }

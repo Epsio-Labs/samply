@@ -73,6 +73,7 @@ pub struct PerfGroup {
     regs_mask: u64,
     event_source: EventSource,
     stopped_processes: Vec<StoppedProcess>,
+    cswitch_frequency: Option<u32>,
 }
 
 fn get_threads(pid: u32) -> Result<Vec<u32>, io::Error> {
@@ -98,7 +99,13 @@ pub enum AttachMode {
 }
 
 impl PerfGroup {
-    pub fn new(frequency: u32, stack_size: u32, regs_mask: u64, event_source: EventSource) -> Self {
+    pub fn new(
+        frequency: u32,
+        stack_size: u32,
+        regs_mask: u64,
+        cswitch_frequency: Option<u32>,
+        event_source: EventSource,
+    ) -> Self {
         PerfGroup {
             event_sorter: EventSorter::new(),
             members: Default::default(),
@@ -108,6 +115,7 @@ impl PerfGroup {
             stack_size,
             event_source,
             regs_mask,
+            cswitch_frequency,
             stopped_processes: Vec::new(),
         }
     }
@@ -119,8 +127,15 @@ impl PerfGroup {
         event_source: EventSource,
         regs_mask: u64,
         attach_mode: AttachMode,
+        cswitch_frequency: Option<u32>,
     ) -> Result<Self, io::Error> {
-        let mut group = PerfGroup::new(frequency, stack_size, regs_mask, event_source);
+        let mut group = PerfGroup::new(
+            frequency,
+            stack_size,
+            regs_mask,
+            cswitch_frequency,
+            event_source,
+        );
         group.open_process(pid, attach_mode)?;
         Ok(group)
     }
@@ -132,67 +147,79 @@ impl PerfGroup {
         let mut perf_events = Vec::new();
         let threads = get_threads(pid)?;
 
-        let cpu_count = num_cpus::get();
-        for cpu in 0..cpu_count as u32 {
-            let mut builder = Perf::build()
-                .pid(pid)
-                .only_cpu(cpu as _)
-                .frequency(self.frequency as u64)
-                .sample_user_stack(self.stack_size)
-                .sample_user_regs(self.regs_mask)
-                .sample_kernel()
-                .gather_context_switches()
-                .event_source(self.event_source)
-                .inherit_to_children()
-                .start_disabled();
-
-            if attach_mode == AttachMode::AttachWithEnableOnExec {
-                builder = builder.enable_on_exec();
-            }
-
-            let perf = builder.open()?;
-
-            perf_events.push((Some(cpu), perf));
+        let mut events = vec![(self.event_source, self.frequency)];
+        if let Some(frequency) = self.cswitch_frequency {
+            events.push((EventSource::SwContextSwitches, frequency));
         }
 
-        if cpu_count * (threads.len() + 1) >= 1000 {
-            for &tid in &threads {
+        let cpu_count = num_cpus::get();
+        for &(event_source, frequency) in events.iter() {
+            for cpu in 0..cpu_count as u32 {
                 let mut builder = Perf::build()
-                    .pid(tid)
-                    .any_cpu()
-                    .frequency(self.frequency as u64)
+                    .pid(pid)
+                    .only_cpu(cpu as _)
+                    .frequency(frequency as u64)
                     .sample_user_stack(self.stack_size)
                     .sample_user_regs(self.regs_mask)
                     .sample_kernel()
-                    .event_source(self.event_source)
+                    .gather_context_switches()
+                    .event_source(event_source)
+                    .inherit_to_children()
                     .start_disabled();
+
                 if attach_mode == AttachMode::AttachWithEnableOnExec {
                     builder = builder.enable_on_exec();
                 }
+
                 let perf = builder.open()?;
 
-                perf_events.push((None, perf));
+                perf_events.push((Some(cpu), perf));
             }
-        } else {
-            for cpu in 0..cpu_count as u32 {
+        }
+
+        if cpu_count * (threads.len() + 1) >= 1000 {
+            eprintln!("warning: too many threads, not attaching each thread per-cpu.");
+            for (event_source, frequency) in events {
                 for &tid in &threads {
                     let mut builder = Perf::build()
                         .pid(tid)
-                        .only_cpu(cpu as _)
-                        .frequency(self.frequency as u64)
+                        .any_cpu()
+                        .frequency(frequency as u64)
                         .sample_user_stack(self.stack_size)
                         .sample_user_regs(self.regs_mask)
                         .sample_kernel()
-                        .gather_context_switches()
-                        .event_source(self.event_source)
-                        .inherit_to_children()
+                        .event_source(event_source)
                         .start_disabled();
                     if attach_mode == AttachMode::AttachWithEnableOnExec {
                         builder = builder.enable_on_exec();
                     }
                     let perf = builder.open()?;
 
-                    perf_events.push((Some(cpu), perf));
+                    perf_events.push((None, perf));
+                }
+            }
+        } else {
+            for (event_source, frequency) in events {
+                for cpu in 0..cpu_count as u32 {
+                    for &tid in &threads {
+                        let mut builder = Perf::build()
+                            .pid(tid)
+                            .only_cpu(cpu as _)
+                            .frequency(frequency as u64)
+                            .sample_user_stack(self.stack_size)
+                            .sample_user_regs(self.regs_mask)
+                            .sample_kernel()
+                            .gather_context_switches()
+                            .event_source(event_source)
+                            .inherit_to_children()
+                            .start_disabled();
+                        if attach_mode == AttachMode::AttachWithEnableOnExec {
+                            builder = builder.enable_on_exec();
+                        }
+                        let perf = builder.open()?;
+
+                        perf_events.push((Some(cpu), perf));
+                    }
                 }
             }
         }
