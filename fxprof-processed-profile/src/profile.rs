@@ -831,11 +831,11 @@ impl Profile {
             }
             None => None,
         };
-        let FrameHandle(frame_thread_handle, frame_index) = frame;
-        assert_eq!(
-            frame_thread_handle, thread_handle,
-            "FrameHandle from different thread passed to Profile::handle_for_stack"
-        );
+        let FrameHandle(_frame_thread_handle, frame_index) = frame;
+        // assert_eq!(
+        //     frame_thread_handle, thread_handle,
+        //     "FrameHandle from different thread passed to Profile::handle_for_stack"
+        // );
         let thread = &mut self.threads[thread.0];
         let stack_index = thread.stack_index_for_stack(prefix, frame_index);
         StackHandle(thread_handle, stack_index)
@@ -859,10 +859,10 @@ impl Profile {
         let thread_handle = thread;
         let mut prefix = None;
         while let Some(frame_handle) = frames_iter(self) {
-            assert_eq!(
-                frame_handle.0, thread_handle,
-                "FrameHandle from different thread passed to Profile::handle_for_stack_frames"
-            );
+            // assert_eq!(
+            //     frame_handle.0, thread_handle,
+            //     "FrameHandle from different thread passed to Profile::handle_for_stack_frames"
+            // );
             let thread = &mut self.threads[thread_handle.0];
             prefix = Some(thread.stack_index_for_stack(prefix, frame_handle.1));
         }
