@@ -161,14 +161,11 @@ where
         if let Some(linux_version) = linux_version {
             profile.set_os_name(&format!("Linux {linux_version}"));
         }
-        let (off_cpu_sampling_interval_ns, off_cpu_weight_per_sample) = match (
-            &interpretation.sampling_is_time_based,
-            &interpretation.cswitch_sampling_is_time_based,
-        ) {
-            (_, true) => (None, 1),
-            (Some(interval), false) => (Some(*interval), 1),
-            (None, false) => (Some(DEFAULT_OFF_CPU_SAMPLING_INTERVAL_NS), 0),
-        };
+        let (off_cpu_sampling_interval_ns, off_cpu_weight_per_sample) =
+            match &interpretation.sampling_is_time_based {
+                Some(interval) => (Some(*interval), 1),
+                None => (Some(DEFAULT_OFF_CPU_SAMPLING_INTERVAL_NS), 0),
+            };
 
         let kernel_symbols = KernelSymbols::new_for_running_kernel().ok();
 
