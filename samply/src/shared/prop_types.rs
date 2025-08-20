@@ -101,6 +101,9 @@ pub struct ProfileCreationProps {
     /// Whether to emit context switch markers.
     #[allow(dead_code)]
     pub should_emit_cswitch_markers: bool,
+    /// Whether to skip kernel frames in call stacks.
+    #[allow(dead_code)]
+    pub skip_kernel_frames: bool,
 }
 
 impl ProfileCreationProps {

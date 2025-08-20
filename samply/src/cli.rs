@@ -309,6 +309,10 @@ pub struct ProfileCreationArgs {
     #[arg(long)]
     pub per_cpu_threads: bool,
 
+    /// Whether to skip kernel frames in call stacks
+    #[arg(long)]
+    skip_kernel_frames: bool,
+
     /// Emit a JitFunctionAdd markers when a JIT function is added.
     #[arg(long)]
     pub jit_markers: bool,
@@ -527,6 +531,7 @@ impl ProfileCreationArgs {
             fold_recursive_prefix: self.fold_recursive_prefix,
             unlink_aux_files: self.unlink_aux_files,
             create_per_cpu_threads: self.per_cpu_threads,
+            skip_kernel_frames: self.skip_kernel_frames,
             arg_count_to_include_in_process_name: self.include_args,
             override_arch: None,
             presymbolicate: self.presymbolicate,
