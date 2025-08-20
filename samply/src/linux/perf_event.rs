@@ -308,7 +308,8 @@ impl PerfBuilder {
             | PERF_SAMPLE_TID
             | PERF_SAMPLE_TIME
             | PERF_SAMPLE_CPU
-            | PERF_SAMPLE_PERIOD;
+            | PERF_SAMPLE_PERIOD
+            | PERF_SAMPLE_CALLCHAIN;
 
         if reg_mask != 0 {
             attr.sample_type |= PERF_SAMPLE_REGS_USER;
@@ -331,7 +332,8 @@ impl PerfBuilder {
             | PERF_ATTR_FLAG_FREQ
             | PERF_ATTR_FLAG_TASK
             | PERF_ATTR_FLAG_SAMPLE_ID_ALL
-            | PERF_ATTR_FLAG_USE_CLOCKID;
+            | PERF_ATTR_FLAG_USE_CLOCKID
+            | PERF_ATTR_FLAG_EXCLUDE_CALLCHAIN_USER;
 
         if self.enable_on_exec {
             attr.flags |= PERF_ATTR_FLAG_ENABLE_ON_EXEC;
@@ -366,7 +368,7 @@ impl PerfBuilder {
             return Err(err);
         }
 
-        const STACK_COUNT_PER_BUFFER: u32 = 32;
+        const STACK_COUNT_PER_BUFFER: u32 = 128;
         let required_space = max(stack_size, 4096) * STACK_COUNT_PER_BUFFER;
         let page_size = 4096;
         let n = (1..26)

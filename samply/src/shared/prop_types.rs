@@ -109,6 +109,9 @@ pub struct ProfileCreationProps {
     /// Whether to attach markers from profiled program to the profiled thread.
     #[allow(dead_code)]
     pub attach_markers_to_profiled_thread: bool,
+    /// Whether to skip kernel functions in call stacks
+    #[allow(dead_code)]
+    pub skip_kernel_stacks: bool,
 }
 
 impl ProfileCreationProps {

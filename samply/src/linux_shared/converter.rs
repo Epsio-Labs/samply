@@ -113,6 +113,9 @@ where
 
     // Whether to attach markers to the profiled thread rather than the main thread.
     should_attach_markers_to_profiled_thread: bool,
+
+    /// Whether to skip kernel functions in call stacks
+    skip_kernel_stacks: bool,
 }
 
 struct SimpleperfConverterData {
@@ -169,6 +172,25 @@ where
 
         let kernel_symbols = KernelSymbols::new_for_running_kernel().ok();
 
+        if let Some(kernel_symbols) = kernel_symbols.as_ref() {
+            let kernel_lib = profile.add_lib(LibraryInfo {
+                name: "Kernel".into(),
+                debug_name: "(kernel)".into(),
+                path: "(kernel)".into(),
+                debug_path: "(kernel)".into(),
+                debug_id: DebugId::nil(),
+                code_id: None,
+                arch: None,
+            });
+            profile.set_lib_symbol_table(kernel_lib, kernel_symbols.symbol_table.clone());
+            profile.add_kernel_lib_mapping(
+                kernel_lib,
+                kernel_symbols.base_avma,
+                0xffffffffffffffff,
+                0,
+            );
+        }
+
         let timestamp_converter = TimestampConverter {
             reference_raw: first_sample_time,
             raw_to_ns_factor: 1,
@@ -216,6 +238,7 @@ where
             kernel_symbols,
             kernel_image_mapping: None,
             simpleperf,
+            skip_kernel_stacks: profile_creation_props.skip_kernel_stacks,
             pe_mappings: PeMappings::new(),
             jit_category_manager: JitCategoryManager::new(),
             fold_recursive_prefix: profile_creation_props.fold_recursive_prefix,
@@ -422,9 +445,12 @@ where
             self.call_chain_return_addresses_are_preadjusted,
         );
 
-        let stack_index = self
-            .unresolved_stacks
-            .convert_no_kernel(stack.iter().rev().cloned());
+        let stack_index = if self.skip_kernel_stacks {
+            self.unresolved_stacks
+                .convert_no_kernel(stack.iter().rev().cloned())
+        } else {
+            self.unresolved_stacks.convert(stack.iter().rev().cloned())
+        };
         let thread = process.threads.get_thread_by_tid(tid, &mut self.profile);
         thread.off_cpu_stack = Some(stack_index);
 
@@ -647,6 +673,9 @@ where
         // CpuMode::from_misc(e.raw.misc)
 
         // Get the first fragment of the stack from e.callchain.
+        // It is assumed that the callchain contains either user or kernel frames,
+        // not both, since we can't distinguish between them here. This can be achieved
+        // by setting exclude_callchain_{user,kernel} in perf's flags.
         if let Some(callchain) = e.callchain {
             let mut is_first_frame = true;
             let mut mode = StackMode::from(e.cpu_mode);
