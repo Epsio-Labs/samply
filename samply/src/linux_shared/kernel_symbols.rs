@@ -19,17 +19,30 @@ pub enum KernelSymbolsError {
     #[error("Could not read /proc/kallsyms: {0}")]
     CouldNotReadProcKallsyms(#[source] std::io::Error),
 
+    #[error("Could not read /proc/modules: {0}")]
+    CouldNotReadProcModules(#[source] std::io::Error),
+
     #[error("Did not find a _text symbol in the kernel symbol list")]
     NoTextSymbol,
+
+    #[error("Did not find an _end symbol in the kernel symbol list")]
+    NoEndSymbol,
 
     #[error("Relative address {0:#x} does not fit into u32")]
     RelativeAddressTooLarge(u64),
 }
 
 #[derive(Debug, Clone)]
+pub struct KernelModuleSymbols {
+    pub build_id: Option<Vec<u8>>,
+    pub symbol_table: Arc<SymbolTable>,
+}
+
+#[derive(Debug, Clone)]
 pub struct KernelSymbols {
     pub build_id: Vec<u8>,
     pub base_avma: u64,
+    // pub end_avma: u64,
     pub symbol_table: Arc<SymbolTable>,
 }
 
@@ -42,6 +55,8 @@ impl KernelSymbols {
             .to_owned();
         let kallsyms = std::fs::read("/proc/kallsyms")
             .map_err(KernelSymbolsError::CouldNotReadProcKallsyms)?;
+        // let modules =
+        //     std::fs::read("/proc/modules").map_err(KernelSymbolsError::CouldNotReadProcModules)?;
         let (base_avma, symbol_table) = parse_kallsyms(&kallsyms)?;
         let symbol_table = Arc::new(symbol_table);
         Ok(KernelSymbols {
@@ -73,10 +88,20 @@ impl<'a> KallSymIter<'a> {
             remaining_data: proc_kallsyms,
         }
     }
+
+    fn maybe_split_module_name(data: &'a [u8]) -> (&'a [u8], Option<&'a [u8]>) {
+        if let Some(module_offset) = memchr::memchr(b'\r', data) {
+            let (name, module_name) = data.split_at(module_offset);
+            let module_name = &module_name[2..module_name.len() - 1]; // extract name from \r[<name>]
+            (name, Some(module_name))
+        } else {
+            (data, None)
+        }
+    }
 }
 
 impl<'a> Iterator for KallSymIter<'a> {
-    type Item = (u64, &'a [u8]);
+    type Item = (u64, &'a [u8], Option<&'a [u8]>); // (absolute address, name, optional module name)
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.remaining_data.is_empty() {
@@ -86,26 +111,30 @@ impl<'a> Iterator for KallSymIter<'a> {
         // Format: <hex address> <space> <letter> <space> <name> \n
         let (after_address, address) = hex_str::<u64>(self.remaining_data).ok()?;
         let starting_with_name = after_address.get(3..)?; // Skip <space> <letter> <space>
-        match memchr::memchr(b'\n', starting_with_name) {
+        let name_and_maybe_module = match memchr::memchr(b'\n', starting_with_name) {
             Some(name_len) => {
                 self.remaining_data = &starting_with_name[(name_len + 1)..];
-                Some((address, &starting_with_name[..name_len]))
+                &starting_with_name[..name_len]
             }
             None => {
                 self.remaining_data = &[];
-                Some((address, starting_with_name))
+                starting_with_name
             }
-        }
+        };
+
+        let (name, module_name_opt) = Self::maybe_split_module_name(name_and_maybe_module);
+        Some((address, name, module_name_opt))
     }
 }
 
-pub fn parse_kallsyms(data: &[u8]) -> Result<(u64, SymbolTable), KernelSymbolsError> {
+pub fn parse_kallsyms(data: &[u8]) -> Result<(u64, u64, SymbolTable), KernelSymbolsError> {
     let mut symbols = Vec::new();
 
     let mut text_addr = None;
-    for (absolute_addr, symbol_name) in KallSymIter::new(data) {
-        match (text_addr, symbol_name) {
-            (None, b"_text") => {
+    let mut end_addr = None;
+    for (absolute_addr, symbol_name, module_name_opt) in KallSymIter::new(data) {
+        match (text_addr, symbol_name, module_name_opt) {
+            (None, b"_text", _) => {
                 text_addr = Some(absolute_addr);
                 symbols.push(Symbol {
                     address: 0,
@@ -113,7 +142,10 @@ pub fn parse_kallsyms(data: &[u8]) -> Result<(u64, SymbolTable), KernelSymbolsEr
                     name: "_text".to_string(),
                 });
             }
-            (Some(text_addr), _) if absolute_addr >= text_addr => {
+            (Some(text_addr), _, _) if absolute_addr >= text_addr => {
+                if symbol_name == b"_end" {
+                    end_addr = Some(absolute_addr);
+                }
                 let relative_address = absolute_addr - text_addr;
                 let relative_address = u32::try_from(relative_address)
                     .map_err(|_| KernelSymbolsError::RelativeAddressTooLarge(relative_address))?;
@@ -129,7 +161,8 @@ pub fn parse_kallsyms(data: &[u8]) -> Result<(u64, SymbolTable), KernelSymbolsEr
         }
     }
     let text_addr = text_addr.ok_or(KernelSymbolsError::NoTextSymbol)?;
-    Ok((text_addr, SymbolTable::new(symbols)))
+    let end_addr = end_addr.ok_or(KernelSymbolsError::NoEndSymbol)?;
+    Ok((text_addr, end_addr, SymbolTable::new(symbols)))
 }
 
 /// Match a hex string, parse it to a u32 or a u64.
@@ -190,9 +223,11 @@ ffff8000081f0000 T _stext
 ffff8000081f0000 T __irqentry_text_start
 ffff8000081f0060 t bcm2836_arm_irqchip_handle_irq
 ffff8000081f00e0 t dw_apb_ictl_handle_irq
-ffff8000081f0190 t sun4i_handle_irq"#;
-        let (base_avma, symbol_table) = parse_kallsyms(kallsyms).unwrap();
+ffff8000081f0190 t sun4i_handle_irq
+ffff800008200000 B _end"#;
+        let (base_avma, end_avma, symbol_table) = parse_kallsyms(kallsyms).unwrap();
         assert_eq!(base_avma, 0xffff8000081e0000);
+        assert_eq!(end_avma, 0xffff800008200000);
         assert_eq!(
             &symbol_table.lookup(0x10061).unwrap().name,
             "bcm2836_arm_irqchip_handle_irq"
