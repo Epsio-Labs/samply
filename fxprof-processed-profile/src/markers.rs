@@ -3,7 +3,7 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use serde::ser::{SerializeMap, SerializeSeq};
-use serde::Serialize;
+use serde::{Serialize as SerializeT};
 use serde_derive::Serialize;
 
 use super::profile::StringHandle;
@@ -228,7 +228,7 @@ pub enum MarkerGraphType {
     LineFilled,
 }
 
-impl Serialize for MarkerGraphType {
+impl SerializeT for MarkerGraphType {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -248,7 +248,7 @@ pub struct MarkerGraph {
     pub color: Option<GraphColor>,
 }
 
-impl Serialize for MarkerGraph {
+impl SerializeT for MarkerGraph {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -472,7 +472,7 @@ impl InternalMarkerSchema {
     }
 }
 
-impl Serialize for InternalMarkerSchema {
+impl SerializeT for InternalMarkerSchema {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -483,7 +483,7 @@ impl Serialize for InternalMarkerSchema {
 
 struct SerializableSchemaFields<'a>(&'a InternalMarkerSchema);
 
-impl Serialize for SerializableSchemaFields<'_> {
+impl SerializeT for SerializableSchemaFields<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -494,7 +494,7 @@ impl Serialize for SerializableSchemaFields<'_> {
 
 struct SerializableSchemaGraphs<'a>(&'a InternalMarkerSchema);
 
-impl<'a> Serialize for SerializableSchemaGraphs<'a> {
+impl<'a> SerializeT for SerializableSchemaGraphs<'a> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,

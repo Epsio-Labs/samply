@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use debugid::DebugId;
 use serde::ser::{SerializeMap, SerializeSeq};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize as DeserializeT, Deserializer, Serialize as SerializeT, Serializer};
 use serde_derive::{Deserialize, Serialize};
 use serde_json::to_writer;
 use wholesym::SourceFilePath;
@@ -15,13 +15,13 @@ use wholesym::SourceFilePath;
 #[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
 struct StringTableIndex(usize);
 
-impl Serialize for StringTableIndex {
+impl SerializeT for StringTableIndex {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.0.serialize(serializer)
     }
 }
 
-impl<'de> Deserialize<'de> for StringTableIndex {
+impl<'de> DeserializeT<'de> for StringTableIndex {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = usize::deserialize(deserializer)?;
         Ok(StringTableIndex(value))
@@ -64,7 +64,7 @@ impl StringTable {
     }
 }
 
-impl Serialize for StringTable {
+impl SerializeT for StringTable {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut seq = serializer.serialize_seq(Some(self.strings.len()))?;
         for string in &self.strings {
@@ -74,7 +74,7 @@ impl Serialize for StringTable {
     }
 }
 
-impl<'de> Deserialize<'de> for StringTable {
+impl<'de> DeserializeT<'de> for StringTable {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let strings = Vec::<String>::deserialize(deserializer)?;
         let mut string_map = HashMap::new();
@@ -165,7 +165,7 @@ pub struct PrecogSymbolInfo {
     data: Vec<PrecogLibrarySymbols>,
 }
 
-impl Serialize for PrecogSymbolInfo {
+impl SerializeT for PrecogSymbolInfo {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let string_table = self.string_table.as_ref();
         let mut map = serializer.serialize_map(Some(2))?;
@@ -175,7 +175,7 @@ impl Serialize for PrecogSymbolInfo {
     }
 }
 
-impl<'de> Deserialize<'de> for PrecogSymbolInfo {
+impl<'de> DeserializeT<'de> for PrecogSymbolInfo {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct PrecogSymbolInfoVisitor;
 
