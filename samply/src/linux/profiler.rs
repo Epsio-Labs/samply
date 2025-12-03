@@ -380,7 +380,7 @@ fn make_converter(
         main_event_attr_index: 0,
         main_event_name: "cycles".to_string(),
         sampling_is_time_based: Some(interval_nanos),
-        off_cpu_indicator: Some(OffCpuIndicator::ContextSwitches),
+        off_cpu_indicator: None,
         sched_switch_attr_index: None,
         known_event_indices: HashMap::new(),
         event_names: vec!["cycles".to_string()],
