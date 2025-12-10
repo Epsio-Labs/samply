@@ -374,15 +374,21 @@ where
             );
         }
 
-        let cpu_delta = if self.off_cpu_indicator.is_some() {
+        let cpu_delta = if let Some(period) = e.period {
+            // If the observed perf event is one of the clock time events, or cycles, then we should convert it to a CpuDelta.
+            // TODO: Detect event type
+
+            // e.period is preferred over context_switch_handler's cpu delta
+            // because it should be more accurate.
+            let _ = self
+                .context_switch_handler
+                .consume_cpu_delta(&mut thread.context_switch_data);
+            CpuDelta::from_nanos(period)
+        } else if self.off_cpu_indicator.is_some() {
             CpuDelta::from_nanos(
                 self.context_switch_handler
                     .consume_cpu_delta(&mut thread.context_switch_data),
             )
-        } else if let Some(period) = e.period {
-            // If the observed perf event is one of the clock time events, or cycles, then we should convert it to a CpuDelta.
-            // TODO: Detect event type
-            CpuDelta::from_nanos(period)
         } else {
             CpuDelta::from_nanos(0)
         };
@@ -408,7 +414,14 @@ where
                 .context_switch_handler
                 .handle_on_cpu_sample(timestamp, &mut cpu.context_switch_data);
 
-            let cpu_delta = if self.off_cpu_indicator.is_some() {
+            let cpu_delta = if let Some(period) = e.period {
+                // Like thread samples, prefer e.period if it's available. This keeps
+                // per-CPU tracks consistent even when we don't have switch records.
+                let _ = self
+                    .context_switch_handler
+                    .consume_cpu_delta(&mut cpu.context_switch_data);
+                CpuDelta::from_nanos(period)
+            } else if self.off_cpu_indicator.is_some() {
                 CpuDelta::from_nanos(
                     self.context_switch_handler
                         .consume_cpu_delta(&mut cpu.context_switch_data),
