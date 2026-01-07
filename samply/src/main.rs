@@ -254,6 +254,14 @@ struct RecordArgs {
     #[arg(long)]
     browsers: bool,
 
+    /// Extra perf events to record (can be specified multiple times).
+    /// Each event creates a separate "fake" process showing samples for that event.
+    /// Supported: cache-misses, branch-misses, cache-references,
+    /// branch-instructions, instructions, page-faults
+    #[cfg(any(target_os = "android", target_os = "linux"))]
+    #[arg(short = 'e', long = "extra-event")]
+    extra_events: Vec<String>,
+
     /// Keep the ETL file after recording (Windows only).
     #[cfg(target_os = "windows")]
     #[arg(long)]
@@ -627,6 +635,10 @@ impl RecordArgs {
             keep_etl: self.keep_etl,
             #[cfg(not(target_os = "windows"))]
             keep_etl: false,
+            #[cfg(any(target_os = "android", target_os = "linux"))]
+            extra_events: self.extra_events.clone(),
+            #[cfg(not(any(target_os = "android", target_os = "linux")))]
+            extra_events: Vec::new(),
         }
     }
 

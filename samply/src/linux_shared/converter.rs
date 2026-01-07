@@ -41,6 +41,7 @@ use super::rss_stat::{RssStat, MM_ANONPAGES, MM_FILEPAGES, MM_SHMEMPAGES, MM_SWA
 use super::svma_file_range::compute_vma_bias;
 use super::vdso::VdsoObject;
 use crate::shared::context_switch::{ContextSwitchHandler, OffCpuSampleGroup};
+use crate::shared::extra_event_processes::ExtraEventThreads;
 use crate::shared::jit_category_manager::JitCategoryManager;
 use crate::shared::lib_mappings::{AndroidArtInfo, LibMappingInfo};
 use crate::shared::per_cpu::Cpus;
@@ -116,6 +117,10 @@ where
 
     // Whether to attach markers to the profiled thread rather than the main thread.
     should_attach_markers_to_profiled_thread: bool,
+
+    /// Fake threads for extra perf events (cache-misses, branch-misses, etc.)
+    /// These threads are created within real processes for proper symbolication.
+    extra_event_threads: ExtraEventThreads,
 }
 
 const DEFAULT_OFF_CPU_SAMPLING_INTERVAL_NS: u64 = 1_000_000; // 1ms
@@ -285,6 +290,7 @@ where
             should_emit_mmap_markers: profile_creation_props.should_emit_mmap_markers,
             should_attach_markers_to_profiled_thread: profile_creation_props
                 .attach_markers_to_profiled_thread,
+            extra_event_threads: ExtraEventThreads::new(),
         }
     }
 
@@ -292,6 +298,8 @@ where
         let mut profile = self.profile;
         self.simpleperf_jit_app_cache_library
             .finish_and_set_symbol_table(&mut profile);
+        // Note: Extra event samples are added to real process's unresolved_samples,
+        // so they're automatically symbolicated with the correct library mappings.
         self.processes.finish(
             &mut profile,
             &self.unresolved_stacks,
@@ -450,6 +458,76 @@ where
                 Some(thread.thread_label_frame.clone()),
             );
         }
+    }
+
+    /// Handle a sample from an extra perf event (like cache-misses, branch-misses).
+    /// Creates a fake thread within the real process for each (event_name, real_tid) pair.
+    /// The fake thread is named "{event_name}-{real_thread_name}", e.g., "cache-misses-main".
+    /// Samples are added to the real process's unresolved_samples for proper symbolication.
+    pub fn handle_extra_event_sample<C: ConvertRegs<UnwindRegs = U::UnwindRegs>>(
+        &mut self,
+        e: &SampleRecord,
+        event_name: &str,
+    ) {
+        let pid = e.pid.expect("Can't handle samples without pids");
+        let tid = e.tid.expect("Can't handle samples without tids");
+        if tid == 0 {
+            // Ignore samples in the idle thread.
+            return;
+        }
+        let timestamp = e
+            .timestamp
+            .expect("Can't handle samples without timestamps");
+
+        let profile_timestamp = self.timestamp_converter.convert_time(timestamp);
+
+        // Get the real process to access its unwinder
+        let process = self.processes.get_by_pid(pid, &mut self.profile);
+
+        // Get the stack using the real process's unwinder
+        let mut stack = Vec::new();
+        Self::get_sample_stack::<C>(
+            e,
+            &process.unwinder,
+            &mut self.cache,
+            &mut stack,
+            self.fold_recursive_prefix,
+            self.call_chain_return_addresses_are_preadjusted,
+        );
+
+        // Get the real thread's name
+        let thread = process.threads.get_thread_by_tid(tid, &mut self.profile);
+        let real_thread_name = thread.name.clone();
+
+        // Get process handle and start time for creating fake thread
+        let process_handle = process.profile_process;
+        let start_time = self.timestamp_converter.convert_time(0);
+
+        // Get or create the fake thread within the same process
+        let fake_thread_handle = self.extra_event_threads.get_or_create_thread(
+            event_name,
+            tid,
+            real_thread_name.as_deref(),
+            process_handle,
+            start_time,
+            &mut self.profile,
+        );
+
+        // Convert the stack and add the sample to the real process's unresolved_samples
+        // This ensures proper symbolication using the process's library mappings
+        let stack_index = self.unresolved_stacks.convert(stack.iter().rev().cloned());
+
+        // Need to get process again since we borrowed self.profile mutably above
+        let process = self.processes.get_by_pid(pid, &mut self.profile);
+        process.unresolved_samples.add_sample(
+            fake_thread_handle,
+            profile_timestamp,
+            timestamp,
+            stack_index,
+            CpuDelta::ZERO, // Extra events don't contribute to CPU time
+            1,              // weight
+            None,
+        );
     }
 
     pub fn handle_sched_switch_sample<C: ConvertRegs<UnwindRegs = U::UnwindRegs>>(

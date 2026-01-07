@@ -38,6 +38,9 @@ pub struct RecordingProps {
     pub browsers: bool,
     #[allow(dead_code)]
     pub keep_etl: bool,
+    /// Extra perf events to record (e.g., "cache-misses", "branch-misses").
+    /// Each event creates a separate fake process in the profile.
+    pub extra_events: Vec<String>,
 }
 
 /// Which process(es) to record.

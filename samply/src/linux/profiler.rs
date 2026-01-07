@@ -104,6 +104,17 @@ pub fn start_recording(
     let output_file_copy = recording_props.output_file.clone();
     let interval = recording_props.interval;
     let time_limit = recording_props.time_limit;
+    // Parse extra events from strings to EventSource
+    let extra_events: Vec<EventSource> = recording_props
+        .extra_events
+        .iter()
+        .filter_map(|s| {
+            EventSource::from_str(s).or_else(|| {
+                eprintln!("Warning: Unknown event type '{}', ignoring", s);
+                None
+            })
+        })
+        .collect();
     let initial_exec_name = command_name.to_string_lossy().to_string();
     let initial_cmdline: Vec<String> = std::iter::once(initial_exec_name.clone())
         .chain(args.iter().map(|arg| arg.to_string_lossy().to_string()))
@@ -125,7 +136,8 @@ pub fn start_recording(
         };
 
         // Create the perf events, setting ENABLE_ON_EXEC.
-        let perf_group = init_profiler(interval, pid, attach_mode, &mut converter);
+        let (perf_group, extra_perf_groups) =
+            init_profiler(interval, pid, attach_mode, &extra_events, &mut converter);
 
         // Tell the main thread to tell the child process to begin executing.
         profile_another_pid_reply_sender.send(true).unwrap();
@@ -140,6 +152,7 @@ pub fn start_recording(
         // Start profiling the process.
         run_profiler(
             perf_group,
+            extra_perf_groups,
             converter,
             &output_file_copy,
             time_limit,
@@ -282,6 +295,17 @@ fn start_profiling_pid(
         crossbeam_channel::bounded(2);
 
     let output_file = recording_props.output_file.clone();
+    // Parse extra events from strings to EventSource
+    let extra_events: Vec<EventSource> = recording_props
+        .extra_events
+        .iter()
+        .filter_map(|s| {
+            EventSource::from_str(s).or_else(|| {
+                eprintln!("Warning: Unknown event type '{}', ignoring", s);
+                None
+            })
+        })
+        .collect();
     let observer_thread = thread::spawn({
         move || {
             let interval = recording_props.interval;
@@ -293,7 +317,8 @@ fn start_profiling_pid(
             else {
                 panic!("The first message should be a StartProfilingAnotherProcess")
             };
-            let perf_group = init_profiler(interval, pid, attach_mode, &mut converter);
+            let (perf_group, extra_perf_groups) =
+                init_profiler(interval, pid, attach_mode, &extra_events, &mut converter);
 
             // Tell the main thread that we are now executing.
             profile_another_pid_reply_sender.send(true).unwrap();
@@ -301,6 +326,7 @@ fn start_profiling_pid(
             let output_file = recording_props.output_file;
             run_profiler(
                 perf_group,
+                extra_perf_groups,
                 converter,
                 &output_file,
                 time_limit,
@@ -413,10 +439,11 @@ fn init_profiler(
     interval: Duration,
     pid: u32,
     attach_mode: AttachMode,
+    extra_events: &[EventSource],
     converter: &mut Converter<
         framehop::UnwinderNative<MmapRangeOrVec, framehop::MayAllocateDuringUnwind>,
     >,
-) -> PerfGroup {
+) -> (PerfGroup, Vec<(EventSource, PerfGroup)>) {
     let interval_nanos = if interval.as_nanos() > 0 {
         interval.as_nanos() as u64
     } else {
@@ -424,6 +451,8 @@ fn init_profiler(
     };
 
     let frequency = (1_000_000_000 / interval_nanos) as u32;
+    // Use a lower frequency for extra events to reduce overhead
+    let extra_frequency = std::cmp::max(frequency / 10, 1);
     let stack_size = 32000;
     let regs_mask = ConvertRegsNative::regs_mask();
 
@@ -564,7 +593,35 @@ fn init_profiler(
         }
     }
 
-    perf
+    // Create extra event PerfGroups
+    let mut extra_perf_groups = Vec::new();
+    for &event_source in extra_events {
+        match PerfGroup::open(
+            pid,
+            extra_frequency,
+            stack_size,
+            event_source,
+            regs_mask,
+            attach_mode,
+        ) {
+            Ok(mut extra_perf) => {
+                // Enable the extra event group if needed
+                if matches!(attach_mode, AttachMode::StopAttachEnableResume) {
+                    extra_perf.enable();
+                }
+                extra_perf_groups.push((event_source, extra_perf));
+            }
+            Err(e) => {
+                eprintln!(
+                    "Warning: Could not open perf event for {}: {}",
+                    event_source.name(),
+                    e
+                );
+            }
+        }
+    }
+
+    (perf, extra_perf_groups)
 }
 
 enum SamplerRequest {
@@ -575,6 +632,7 @@ enum SamplerRequest {
 #[allow(clippy::too_many_arguments)]
 fn run_profiler(
     mut perf: PerfGroup,
+    mut extra_perf_groups: Vec<(EventSource, PerfGroup)>,
     mut converter: Converter<
         framehop::UnwinderNative<MmapRangeOrVec, framehop::MayAllocateDuringUnwind>,
     >,
@@ -720,6 +778,20 @@ fn run_profiler(
                 pending_lost_events = 0;
             }
         });
+
+        // Consume events from extra perf groups
+        for (event_source, extra_perf) in &mut extra_perf_groups {
+            let event_name = event_source.name();
+            extra_perf.consume_events(&mut |event_ref| {
+                let record = event_ref.get();
+                let parsed_record = record.parse().unwrap();
+
+                // Only handle Sample events from extra groups
+                if let EventRecord::Sample(e) = parsed_record {
+                    converter.handle_extra_event_sample::<ConvertRegsNative>(&e, event_name);
+                }
+            });
+        }
 
         perf.wait();
     }

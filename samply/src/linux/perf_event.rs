@@ -144,10 +144,61 @@ fn next_raw_event(
     Some(raw_event_location)
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum EventSource {
     HwCpuCycles,
     SwCpuClock,
+    // Hardware counters
+    HwCacheMisses,
+    HwBranchMisses,
+    HwCacheReferences,
+    HwBranchInstructions,
+    HwInstructions,
+    // Software counters
+    SwPageFaults,
+}
+
+impl EventSource {
+    /// Returns the name of this event source as used in CLI and UI.
+    pub fn name(&self) -> &'static str {
+        match self {
+            EventSource::HwCpuCycles => "cpu-cycles",
+            EventSource::SwCpuClock => "cpu-clock",
+            EventSource::HwCacheMisses => "cache-misses",
+            EventSource::HwBranchMisses => "branch-misses",
+            EventSource::HwCacheReferences => "cache-references",
+            EventSource::HwBranchInstructions => "branch-instructions",
+            EventSource::HwInstructions => "instructions",
+            EventSource::SwPageFaults => "page-faults",
+        }
+    }
+
+    /// Parse an event source from a string (CLI argument).
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "cpu-cycles" => Some(EventSource::HwCpuCycles),
+            "cpu-clock" => Some(EventSource::SwCpuClock),
+            "cache-misses" => Some(EventSource::HwCacheMisses),
+            "branch-misses" => Some(EventSource::HwBranchMisses),
+            "cache-references" => Some(EventSource::HwCacheReferences),
+            "branch-instructions" => Some(EventSource::HwBranchInstructions),
+            "instructions" => Some(EventSource::HwInstructions),
+            "page-faults" => Some(EventSource::SwPageFaults),
+            _ => None,
+        }
+    }
+
+    /// Returns a list of all valid extra event names for CLI help.
+    pub fn extra_event_names() -> &'static [&'static str] {
+        &[
+            "cache-misses",
+            "branch-misses",
+            "cache-references",
+            "branch-instructions",
+            "instructions",
+            "page-faults",
+        ]
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -294,6 +345,30 @@ impl PerfBuilder {
             EventSource::SwCpuClock => {
                 attr.kind = PERF_TYPE_SOFTWARE;
                 attr.config = PERF_COUNT_SW_CPU_CLOCK;
+            }
+            EventSource::HwCacheMisses => {
+                attr.kind = PERF_TYPE_HARDWARE;
+                attr.config = PERF_COUNT_HW_CACHE_MISSES;
+            }
+            EventSource::HwBranchMisses => {
+                attr.kind = PERF_TYPE_HARDWARE;
+                attr.config = PERF_COUNT_HW_BRANCH_MISSES;
+            }
+            EventSource::HwCacheReferences => {
+                attr.kind = PERF_TYPE_HARDWARE;
+                attr.config = PERF_COUNT_HW_CACHE_REFERENCES;
+            }
+            EventSource::HwBranchInstructions => {
+                attr.kind = PERF_TYPE_HARDWARE;
+                attr.config = PERF_COUNT_HW_BRANCH_INSTRUCTIONS;
+            }
+            EventSource::HwInstructions => {
+                attr.kind = PERF_TYPE_HARDWARE;
+                attr.config = PERF_COUNT_HW_INSTRUCTIONS;
+            }
+            EventSource::SwPageFaults => {
+                attr.kind = PERF_TYPE_SOFTWARE;
+                attr.config = PERF_COUNT_SW_PAGE_FAULTS;
             }
         }
 
