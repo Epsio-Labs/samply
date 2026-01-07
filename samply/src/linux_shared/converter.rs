@@ -517,6 +517,11 @@ where
         // This ensures proper symbolication using the process's library mappings
         let stack_index = self.unresolved_stacks.convert(stack.iter().rev().cloned());
 
+        // Use e.period as the "delta" for visualization in the track view.
+        // For hardware counters, period is the event count (e.g., number of cache misses).
+        // This makes the track height proportional to the event count.
+        let event_count_delta = CpuDelta::from_nanos(e.period.unwrap_or(1));
+
         // Need to get process again since we borrowed self.profile mutably above
         let process = self.processes.get_by_pid(pid, &mut self.profile);
         process.unresolved_samples.add_sample(
@@ -524,8 +529,8 @@ where
             profile_timestamp,
             timestamp,
             stack_index,
-            CpuDelta::ZERO, // Extra events don't contribute to CPU time
-            1,              // weight
+            event_count_delta,
+            1, // weight
             None,
         );
     }
