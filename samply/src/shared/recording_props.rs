@@ -76,6 +76,8 @@ pub struct ProfileCreationProps {
     pub main_thread_only: bool,
     /// Merge non-overlapping threads of the same name.
     pub reuse_threads: bool,
+    /// Collapse all threads with the same name into a single thread.
+    pub collapse_threads: bool,
     /// Fold repeated frames at the base of the stack.
     pub fold_recursive_prefix: bool,
     /// Unlink jitdump/marker files

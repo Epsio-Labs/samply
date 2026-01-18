@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="ALL" />
+  </component>
+  <component name="CargoProjects">
+    <cargoProject FILE="$PROJECT_DIR$/Cargo.toml">
+      <package file="$PROJECT_DIR$/tools/benchmarks">
+        <feature name="default" enabled="true" />
+      </package>
+      <package file="$PROJECT_DIR$/tools/dump_table">
+        <feature name="default" enabled="true" />
+      </package>
+      <package file="$PROJECT_DIR$/fxprof-processed-profile">
+        <feature name="default" enabled="true" />
+      </package>
+      <package file="$PROJECT_DIR$/gecko_profile">
+        <feature name="default" enabled="true" />
+      </package>
+      <package file="$PROJECT_DIR$/tools/query_api">
+        <feature name="default" enabled="true" />
+      </package>
+      <package file="$PROJECT_DIR$/samply">
+        <feature name="default" enabled="true" />
+      </package>
+      <package file="$PROJECT_DIR$/samply-api">
+        <feature name="default" enabled="true" />
+      </package>
+      <package file="$PROJECT_DIR$/samply-quota-manager">
+        <feature name="default" enabled="true" />
+      </package>
+      <package file="$PROJECT_DIR$/samply-symbols">
+        <feature name="default" enabled="true" />
+      </package>
+      <package file="$PROJECT_DIR$/wholesym">
+        <feature name="default" enabled="true" />
+      </package>
+      <package file="$PROJECT_DIR$/wholesym-addr2line">
+        <feature name="default" enabled="true" />
+      </package>
+    </cargoProject>
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="b5e2aac2-47a5-4284-b069-35d5bee2f796" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/samply/src/linux_shared/converter.rs" beforeDir="false" afterPath="$PROJECT_DIR$/samply/src/linux_shared/converter.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/samply/src/linux_shared/process.rs" beforeDir="false" afterPath="$PROJECT_DIR$/samply/src/linux_shared/process.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/samply/src/linux_shared/process_threads.rs" beforeDir="false" afterPath="$PROJECT_DIR$/samply/src/linux_shared/process_threads.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/samply/src/linux_shared/processes.rs" beforeDir="false" afterPath="$PROJECT_DIR$/samply/src/linux_shared/processes.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/samply/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/samply/src/main.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/samply/src/shared/extra_event_processes.rs" beforeDir="false" afterPath="$PROJECT_DIR$/samply/src/shared/extra_event_processes.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/samply/src/shared/recording_props.rs" beforeDir="false" afterPath="$PROJECT_DIR$/samply/src/shared/recording_props.rs" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ExecutionTargetManager" SELECTED_TARGET="RsBuildProfile:test" />
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="MacroExpansionManager">
+    <option name="directoryName" value="PbvuWRnt" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;customColor&quot;: &quot;&quot;,
+  &quot;associatedIndex&quot;: 5
+}</component>
+  <component name="ProjectId" id="37vuC4yALShOeJaRfLKS3F1qImA" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
+    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;bugfix/prefer-accurate-cpu-delta&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/maorkern/Documents/dev/samply&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;org.rust.cargo.project.model.PROJECT_DISCOVERY&quot;: &quot;true&quot;,
+    &quot;org.rust.first.attach.projects&quot;: &quot;true&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="RunManager" selected="Cargo.Test samply">
+    <configuration name="Run benchmarks" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="command" value="run --package benchmarks --bin benchmarks" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Run dump-table" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="command" value="run --package dump-table --bin dump-table" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Run query-api" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="command" value="run --package query-api --bin query-api" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Run samply" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="command" value="run --package samply --bin samply" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Run wholesym-addr2line" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="command" value="run --package wholesym-addr2line --bin wholesym-addr2line" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Test samply" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="buildProfileId" value="test" />
+      <option name="command" value="test --workspace" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+  </component>
+  <component name="RustProjectSettings">
+    <option name="toolchainHomeDirectory" value="$USER_HOME$/.cargo/bin" />
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="b5e2aac2-47a5-4284-b069-35d5bee2f796" name="Changes" comment="" />
+      <created>1767795735096</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1767795735096</updated>
+      <workItem from="1767795736219" duration="18193000" />
+      <workItem from="1767906485412" duration="538000" />
+      <workItem from="1768163926837" duration="597000" />
+      <workItem from="1768214417929" duration="597000" />
+      <workItem from="1768215990027" duration="597000" />
+      <workItem from="1768227023535" duration="598000" />
+      <workItem from="1768227927453" duration="597000" />
+      <workItem from="1768319304932" duration="597000" />
+      <workItem from="1768325608253" duration="597000" />
+      <workItem from="1768344055346" duration="597000" />
+      <workItem from="1768345461986" duration="597000" />
+      <workItem from="1768433291654" duration="598000" />
+      <workItem from="1768475389498" duration="597000" />
+      <workItem from="1768499600420" duration="597000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/samply/src/server.rs</url>
+          <line>473</line>
+          <option name="timeStamp" value="1" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
+  </component>
+</project>

@@ -14,6 +14,12 @@ pub struct ProcessThreads {
     pub main_thread: Thread,
     pub threads_by_tid: FastHashMap<i32, Thread>,
     pub thread_recycler: Option<ThreadRecycler>,
+    /// When true, all threads with the same name share a single ThreadHandle.
+    pub collapse_threads: bool,
+    /// Maps thread name -> canonical TID (only used when collapse_threads is true).
+    pub threads_by_name: FastHashMap<String, i32>,
+    /// Maps TID -> canonical TID for collapsed threads (only used when collapse_threads is true).
+    pub tid_to_canonical: FastHashMap<i32, i32>,
 }
 
 impl ProcessThreads {
@@ -24,6 +30,7 @@ impl ProcessThreads {
         main_thread_label_frame: FrameInfo,
         name: Option<String>,
         thread_recycler: Option<ThreadRecycler>,
+        collapse_threads: bool,
     ) -> Self {
         Self {
             pid,
@@ -31,6 +38,9 @@ impl ProcessThreads {
             main_thread: Thread::new(main_thread_handle, main_thread_label_frame, name),
             threads_by_tid: Default::default(),
             thread_recycler,
+            collapse_threads,
+            threads_by_name: Default::default(),
+            tid_to_canonical: Default::default(),
         }
     }
 
@@ -63,6 +73,31 @@ impl ProcessThreads {
         if tid == self.pid {
             return &mut self.main_thread;
         }
+
+        // If collapse_threads is enabled and we have a name, check if we should
+        // redirect to an existing thread with the same name.
+        if self.collapse_threads {
+            if let Some(name) = &name {
+                let canonical_tid = self.threads_by_name.get(name).copied();
+                let canonical_exists = canonical_tid
+                    .map(|ct| self.threads_by_tid.contains_key(&ct))
+                    .unwrap_or(false);
+
+                if let (Some(canonical_tid), true) = (canonical_tid, canonical_exists) {
+                    // A thread with this name already exists, redirect to it.
+                    if canonical_tid != tid {
+                        self.tid_to_canonical.insert(tid, canonical_tid);
+                    }
+                    return self.threads_by_tid.get_mut(&canonical_tid).unwrap();
+                } else {
+                    // First thread with this name, or canonical doesn't exist yet
+                    // This thread becomes the canonical one.
+                    self.threads_by_name.insert(name.clone(), tid);
+                    self.tid_to_canonical.insert(tid, tid);
+                }
+            }
+        }
+
         match self.threads_by_tid.entry(tid) {
             Entry::Vacant(entry) => {
                 if let (Some(name), Some(thread_recycler)) = (&name, self.thread_recycler.as_mut())
@@ -117,6 +152,21 @@ impl ProcessThreads {
         if tid == self.pid {
             return;
         }
+
+        // If collapse_threads is enabled, check if we should redirect to an existing thread
+        if self.collapse_threads {
+            if let Some(&canonical_tid) = self.threads_by_name.get(&name) {
+                // A thread with this name already exists - redirect this TID to it
+                self.tid_to_canonical.insert(tid, canonical_tid);
+                // Don't rename or create - future lookups will use the canonical thread
+                return;
+            } else {
+                // First thread with this name - it becomes canonical
+                self.threads_by_name.insert(name.clone(), tid);
+                self.tid_to_canonical.insert(tid, tid);
+            }
+        }
+
         match self.threads_by_tid.entry(tid) {
             Entry::Vacant(_) => {
                 self.recycle_or_get_new_thread(tid, Some(name), timestamp, profile);
@@ -170,14 +220,23 @@ impl ProcessThreads {
         if tid == self.pid {
             return &mut self.main_thread;
         }
-        self.threads_by_tid.entry(tid).or_insert_with(|| {
+
+        // If collapse_threads is enabled and we have a mapping for this TID,
+        // redirect to the canonical thread.
+        let effective_tid = if self.collapse_threads {
+            self.tid_to_canonical.get(&tid).copied().unwrap_or(tid)
+        } else {
+            tid
+        };
+
+        self.threads_by_tid.entry(effective_tid).or_insert_with(|| {
             let profile_thread = profile.add_thread(
                 self.profile_process,
-                tid as u32,
+                effective_tid as u32,
                 Timestamp::from_millis_since_reference(0.0),
                 false,
             );
-            let thread_label_frame = make_thread_label_frame(profile, None, self.pid, tid);
+            let thread_label_frame = make_thread_label_frame(profile, None, self.pid, effective_tid);
             Thread {
                 profile_thread,
                 context_switch_data: Default::default(),

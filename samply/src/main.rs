@@ -364,6 +364,11 @@ pub struct ProfileCreationArgs {
     #[arg(long)]
     reuse_threads: bool,
 
+    /// Collapse all threads with the same name into a single thread.
+    /// Unlike --reuse-threads, this merges even concurrently running threads.
+    #[arg(long)]
+    collapse_threads: bool,
+
     /// Fold repeated frames at the base of the stack.
     #[arg(long)]
     fold_recursive_prefix: bool,
@@ -559,6 +564,7 @@ impl ImportArgs {
             fallback_profile_name,
             main_thread_only: self.profile_creation_args.main_thread_only,
             reuse_threads: self.profile_creation_args.reuse_threads,
+            collapse_threads: self.profile_creation_args.collapse_threads,
             fold_recursive_prefix: self.profile_creation_args.fold_recursive_prefix,
             unlink_aux_files: self.profile_creation_args.unlink_aux_files,
             create_per_cpu_threads: self.profile_creation_args.per_cpu_threads,
@@ -692,6 +698,7 @@ impl RecordArgs {
             fallback_profile_name,
             main_thread_only: self.profile_creation_args.main_thread_only,
             reuse_threads: self.profile_creation_args.reuse_threads,
+            collapse_threads: self.profile_creation_args.collapse_threads,
             fold_recursive_prefix: self.profile_creation_args.fold_recursive_prefix,
             unlink_aux_files: self.profile_creation_args.unlink_aux_files,
             create_per_cpu_threads: self.profile_creation_args.per_cpu_threads,

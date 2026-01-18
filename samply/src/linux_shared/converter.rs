@@ -258,6 +258,7 @@ where
                 profile_creation_props.reuse_threads,
                 profile_creation_props.unlink_aux_files,
                 profile_creation_props.should_emit_jit_markers,
+                profile_creation_props.collapse_threads,
             ),
             timestamp_converter,
             current_sample_time: first_sample_time,
@@ -290,7 +291,7 @@ where
             should_emit_mmap_markers: profile_creation_props.should_emit_mmap_markers,
             should_attach_markers_to_profiled_thread: profile_creation_props
                 .attach_markers_to_profiled_thread,
-            extra_event_threads: ExtraEventThreads::new(),
+            extra_event_threads: ExtraEventThreads::new(profile_creation_props.collapse_threads),
         }
     }
 
@@ -519,8 +520,11 @@ where
 
         // Use e.period as the "delta" for visualization in the track view.
         // For hardware counters, period is the event count (e.g., number of cache misses).
-        // This makes the track height proportional to the event count.
-        let event_count_delta = CpuDelta::from_nanos(e.period.unwrap_or(1));
+        // We scale by an event-specific factor to make the track visible,
+        // while preserving relative proportions between samples within each event type.
+        let scale_factor = visualization_scale_factor_for_event(event_name);
+        let event_count = e.period.unwrap_or(1);
+        let event_count_delta = CpuDelta::from_nanos(event_count.saturating_mul(scale_factor));
 
         // Need to get process again since we borrowed self.profile mutably above
         let process = self.processes.get_by_pid(pid, &mut self.profile);
@@ -2062,5 +2066,19 @@ impl StaticSchemaMarker for MmapMarker {
 
     fn number_field_value(&self, _field_index: u32) -> f64 {
         unreachable!()
+    }
+}
+
+/// Returns a scale factor for visualizing the given event type in the track view.
+/// Different event types have vastly different frequencies, so we need per-event scaling.
+fn visualization_scale_factor_for_event(event_name: &str) -> u64 {
+    match event_name {
+        "page-faults" => 2_500,
+        "cache-misses" => 1,
+        "branch-misses" => 1,
+        "cache-references" => 1,
+        "branch-instructions" => 1,
+        "instructions" => 1,
+        _ => 1_000, // Default fallback
     }
 }

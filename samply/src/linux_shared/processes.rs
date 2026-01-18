@@ -31,13 +31,21 @@ where
 
     /// Whether to emit JitFunctionAdd markers.
     should_emit_jit_markers: bool,
+
+    /// Whether to collapse threads with the same name into a single thread.
+    collapse_threads: bool,
 }
 
 impl<U> Processes<U>
 where
     U: Unwinder + Default,
 {
-    pub fn new(allow_reuse: bool, unlink_aux_data: bool, should_emit_jit_markers: bool) -> Self {
+    pub fn new(
+        allow_reuse: bool,
+        unlink_aux_data: bool,
+        should_emit_jit_markers: bool,
+        collapse_threads: bool,
+    ) -> Self {
         let process_recycler = if allow_reuse {
             Some(ProcessRecycler::new())
         } else {
@@ -49,6 +57,7 @@ where
             process_sample_datas: Vec::new(),
             unlink_aux_data,
             should_emit_jit_markers,
+            collapse_threads,
         }
     }
 
@@ -83,6 +92,7 @@ where
                             Some(jit_function_recycler),
                             self.unlink_aux_data,
                             self.should_emit_jit_markers,
+                            self.collapse_threads,
                         );
                         return entry.insert(process);
                     }
@@ -119,6 +129,7 @@ where
                     jit_function_recycler,
                     self.unlink_aux_data,
                     self.should_emit_jit_markers,
+                    self.collapse_threads,
                 );
                 entry.insert(process)
             }
@@ -171,6 +182,7 @@ where
                 jit_function_recycler,
                 self.unlink_aux_data,
                 self.should_emit_jit_markers,
+                self.collapse_threads,
             )
         })
     }

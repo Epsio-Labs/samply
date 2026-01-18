@@ -63,6 +63,7 @@ where
         jit_function_recycler: Option<JitFunctionRecycler>,
         unlink_aux_files: bool,
         should_emit_jit_markers: bool,
+        collapse_threads: bool,
     ) -> Self {
         Self {
             profile_process: process_handle,
@@ -78,6 +79,7 @@ where
                 main_thread_label_frame,
                 name,
                 thread_recycler,
+                collapse_threads,
             ),
             unresolved_samples: Default::default(),
             jit_app_cache_mapping_ops: LibMappingOpQueue::default(),
